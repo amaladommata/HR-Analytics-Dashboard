@@ -10,6 +10,9 @@ interface BreakdownTableProps {
   limit?: number;
   /** 'headcount' (default) counts only employees active as of `asOf`; 'count' counts every matching row (e.g. a list of exits). */
   mode?: 'headcount' | 'count';
+  /** When set, rows are clickable and the selected key is highlighted. */
+  onRowClick?: (key: string) => void;
+  selectedKey?: string | null;
 }
 
 export function BreakdownTable({
@@ -20,6 +23,8 @@ export function BreakdownTable({
   filters,
   limit = 10,
   mode = 'headcount',
+  onRowClick,
+  selectedKey,
 }: BreakdownTableProps) {
   const matched = employees.filter((e) => matchesFilters(e, filters));
   const total = mode === 'headcount' ? headcount(employees, asOf, filters) : matched.length;
@@ -46,17 +51,23 @@ export function BreakdownTable({
       <h3 className="mb-3 text-sm font-semibold text-gray-700">{title}</h3>
       <div className="flex flex-col gap-2">
         {rows.map((r) => (
-          <div key={r.key} className="flex items-center gap-2 text-sm">
+          <div
+            key={r.key}
+            onClick={() => onRowClick?.(r.key)}
+            className={`flex items-center gap-2 rounded text-sm ${
+              onRowClick ? 'cursor-pointer px-1 py-0.5 hover:bg-teal-50' : ''
+            } ${selectedKey === r.key ? 'bg-teal-50 ring-1 ring-teal-300' : ''}`}
+          >
             <span className="w-32 truncate text-gray-600" title={r.key}>
               {r.key}
             </span>
             <div className="h-2 flex-1 rounded-full bg-gray-100">
               <div
-                className="h-2 rounded-full bg-indigo-500"
+                className="h-2 rounded-full bg-teal-600"
                 style={{ width: `${total ? (r.count / total) * 100 : 0}%` }}
               />
             </div>
-            <span className="w-16 text-right text-gray-700">{r.count}</span>
+            <span className="w-16 text-right text-gray-700">{r.count.toLocaleString()}</span>
             <span className="w-12 text-right text-xs text-gray-400">
               {total ? ((r.count / total) * 100).toFixed(0) : 0}%
             </span>

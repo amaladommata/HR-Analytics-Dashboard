@@ -14,7 +14,7 @@ export function GrainToggle({ value, onChange }: { value: Grain; onChange: (g: G
           key={g.key}
           onClick={() => onChange(g.key)}
           className={`rounded-md px-3 py-1 ${
-            value === g.key ? 'bg-gray-900 text-white' : 'text-gray-600 hover:bg-gray-100'
+            value === g.key ? 'bg-teal-700 text-white' : 'text-gray-600 hover:bg-gray-100'
           }`}
         >
           {g.label}

@@ -22,28 +22,31 @@ export const EMPTY_FILTERS: Filters = {
 };
 
 /**
- * Active/inactive status strictly as of date D, per BUILD_SPEC.md section 2.
- * Returns 'unresolved' for InActive employees with no matching exit record
- * (excluded from historical as-of-date headcount per section 5, known gap #2).
+ * Active/inactive status strictly as of date D, per BUILD_SPEC.md section 2,
+ * with a business-rule override: an InActive employee with no matching exit
+ * record in Global Exits or Exits-YTD (no LWD, no resignation/confirmed
+ * date) is treated as ACTIVE, not excluded. In practice these are withdrawn
+ * resignations, reinstated absconding cases, or other InActive tags that
+ * never produced a real exit event — there is no evidence they ever left.
  */
-export function isActiveAsOf(e: Employee, d: Date): boolean | 'unresolved' {
+export function isActiveAsOf(e: Employee, d: Date): boolean {
   if (!e.doj || e.doj > d) return false;
-  if (e.exitUnresolved) return 'unresolved';
+  if (e.exitUnresolved) return true;
   if (!e.exitDateResolved) return e.status === 'Active';
   return d <= e.exitDateResolved;
 }
 
-/** Point-in-time headcount as of date D matching filters. Excludes unresolved records (see BUILD_SPEC gap #2). */
+/** Point-in-time headcount as of date D matching filters. */
 export function headcount(employees: Employee[], d: Date, filters: Filters = EMPTY_FILTERS): number {
   let count = 0;
   for (const e of employees) {
     if (!matchesFilters(e, filters)) continue;
-    if (isActiveAsOf(e, d) === true) count += 1;
+    if (isActiveAsOf(e, d)) count += 1;
   }
   return count;
 }
 
-/** Count of InActive/unresolved employees matching filters, for the data-quality tile. */
+/** Count of InActive employees with no matching exit record — now counted as active (see isActiveAsOf). */
 export function unresolvedCount(employees: Employee[], filters: Filters = EMPTY_FILTERS): number {
   return employees.filter((e) => matchesFilters(e, filters) && e.exitUnresolved).length;
 }
@@ -97,7 +100,7 @@ export function topReasons(
   exitsYtd: ExitsYtdRow[],
   periodStart: Date,
   periodEnd: Date,
-  limit = 3,
+  limit = 8,
 ): ReasonCount[] {
   const inPeriod = exitsYtd.filter(
     (r) => r.lwd && r.lwd >= periodStart && r.lwd <= periodEnd && r.reasonsCategory,
@@ -123,7 +126,7 @@ export function topClientAttrition(
   employees: Employee[],
   periodStart: Date,
   periodEnd: Date,
-  limit = 3,
+  limit = 8,
   minHc = 15,
 ): ClientAttrition[] {
   const clients = new Set(employees.map((e) => e.client).filter((c): c is string => !!c));
@@ -136,6 +139,42 @@ export function topClientAttrition(
     results.push({ client, exits, avgHc, attritionPct: (exits / avgHc) * 100 });
   }
   return results.sort((a, b) => b.attritionPct - a.attritionPct).slice(0, limit);
+}
+
+export interface DrillDownGroup {
+  dimension: 'PG Rating' | 'Grade' | 'Tenure';
+  counts: { key: string; count: number }[];
+}
+
+/** Breaks exits matching `reasonsCategory` within [start,end] down by PG Rating, Grade, and Tenure bucket. */
+export function reasonDrillDown(
+  exitsYtd: ExitsYtdRow[],
+  reasonsCategory: string,
+  periodStart: Date,
+  periodEnd: Date,
+): DrillDownGroup[] {
+  const rows = exitsYtd.filter(
+    (r) =>
+      r.reasonsCategory === reasonsCategory &&
+      r.lwd &&
+      r.lwd >= periodStart &&
+      r.lwd <= periodEnd,
+  );
+  const groupBy = (pick: (r: ExitsYtdRow) => string) => {
+    const counts = new Map<string, number>();
+    for (const r of rows) {
+      const key = pick(r) || 'Not Available';
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return [...counts.entries()]
+      .map(([key, count]) => ({ key, count }))
+      .sort((a, b) => b.count - a.count);
+  };
+  return [
+    { dimension: 'PG Rating', counts: groupBy((r) => r.pgRating) },
+    { dimension: 'Grade', counts: groupBy((r) => r.grade) },
+    { dimension: 'Tenure', counts: groupBy((r) => r.tenurity) },
+  ];
 }
 
 export function distinctValues(employees: Employee[], key: keyof Employee): string[] {

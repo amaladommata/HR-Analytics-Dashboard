@@ -58,18 +58,24 @@ export function SummaryPage({ data, filters, asOf }: { data: DataBundle; filters
         <Tile label="Attrition %" value={`${pct.toFixed(1)}%`} />
         <Tile label="On notice" value={onNotice.toLocaleString()} />
         <Tile
-          label="Data gaps"
+          label="No exit record"
           value={`${data.unresolvedCount}`}
-          sublabel="unresolved exit dates"
+          sublabel="InActive tag, counted active"
           accent="warning"
         />
       </div>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <TrendChart title="Joiners — 13-month rolling" data={joinersTrend} color="#16a34a" />
-        <TrendChart title="Average Headcount — 13-month rolling" data={avgHcTrend} color="#6366f1" />
-        <TrendChart title="Resignations — 13-month rolling" data={resignationsTrend} color="#0891b2" />
-        <TrendChart title="Attrition % — 13-month rolling" data={attritionTrend} color="#e11d48" valueSuffix="%" />
+        <TrendChart title="Average Headcount — 13-month rolling" data={avgHcTrend} color="#0f766e" />
+        <TrendChart title="Exits — 13-month rolling" data={resignationsTrend} color="#0891b2" />
+        <TrendChart
+          title="Attrition % — 13-month rolling"
+          data={attritionTrend}
+          color="#e11d48"
+          valueSuffix="%"
+          formatValue={(v) => v.toFixed(1)}
+        />
       </div>
     </div>
   );
