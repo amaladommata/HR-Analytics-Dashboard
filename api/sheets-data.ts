@@ -5,20 +5,21 @@ import { GoogleAuth } from 'google-auth-library';
  * and returns them as JSON row arrays, so the dashboard never has to be
  * rebuilt/redeployed when the underlying sheet changes.
  *
- * Auth: a Google Cloud service account with "Viewer" access on each sheet
- * (share the sheet with the service account's email). Credentials and sheet
- * locations are read from environment variables — see README.md for setup.
+ * Auth: a Google Cloud service account with "Viewer" access on the
+ * spreadsheet (share it with the service account's email). Credentials and
+ * sheet locations are read from environment variables — see README.md.
  *
  * Required env vars:
  *   GOOGLE_SERVICE_ACCOUNT_EMAIL
  *   GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY   (with literal \n for newlines)
- *   SHEET_HEADCOUNT       e.g. "1AbC...xyz#Headcount"
- *   SHEET_EXITS_YTD       e.g. "1AbC...xyz#Exits YTD"
- *   SHEET_NOTICE_PERIOD   e.g. "1AbC...xyz#Notice Period"
- *   SHEET_GLOBAL_EXITS    e.g. "1AbC...xyz#Global Exits"
- * Each value is "<spreadsheetId>#<tabName>" (tab name defaults to reading the
- * whole first sheet if omitted). All four can point at the same spreadsheet
- * (different tabs) or four different spreadsheets.
+ *   SHEET_HEADCOUNT       e.g. "1AbC...xyz#1653146746"  or "1AbC...xyz#Headcount"
+ *   SHEET_EXITS_YTD
+ *   SHEET_NOTICE_PERIOD
+ *   SHEET_GLOBAL_EXITS
+ * Each value is "<spreadsheetId>#<tabRef>", where tabRef is either the numeric
+ * gid from the sheet's URL (?gid=1234) or the literal tab name. All four
+ * typically point at tabs in the same spreadsheet (as here), but can also be
+ * four different spreadsheets.
  */
 
 interface VercelRequest {
@@ -32,20 +33,58 @@ interface VercelResponse {
 
 type Row = Record<string, string>;
 
-function parseSheetRef(envValue: string | undefined, envName: string): { spreadsheetId: string; range: string } {
-  if (!envValue) throw new Error(`Missing env var ${envName}`);
-  const [spreadsheetId, tab] = envValue.split('#');
-  if (!spreadsheetId) throw new Error(`Invalid ${envName}: expected "<spreadsheetId>#<tabName>"`);
-  return { spreadsheetId, range: tab ? `'${tab}'` : 'A1:ZZ' };
+interface SheetRef {
+  spreadsheetId: string;
+  gid: string | null;
+  tabName: string | null;
 }
 
-async function fetchSheetRows(
+function parseSheetRef(envValue: string | undefined, envName: string): SheetRef {
+  if (!envValue) throw new Error(`Missing env var ${envName}`);
+  const [spreadsheetId, tabRef] = envValue.split('#');
+  if (!spreadsheetId) throw new Error(`Invalid ${envName}: expected "<spreadsheetId>#<gid-or-tabName>"`);
+  if (!tabRef) return { spreadsheetId, gid: null, tabName: null };
+  return /^\d+$/.test(tabRef)
+    ? { spreadsheetId, gid: tabRef, tabName: null }
+    : { spreadsheetId, gid: null, tabName: tabRef };
+}
+
+/** Resolves gid -> sheet title for every distinct spreadsheet referenced, one metadata call per spreadsheet. */
+async function resolveGidsToTitles(
   auth: GoogleAuth,
-  spreadsheetId: string,
-  range: string,
-): Promise<Row[]> {
+  refs: SheetRef[],
+): Promise<Map<string, Map<string, string>>> {
+  const client = await auth.getClient();
+  const bySpreadsheet = new Map<string, Map<string, string>>();
+  const spreadsheetIds = [...new Set(refs.filter((r) => r.gid).map((r) => r.spreadsheetId))];
+
+  await Promise.all(
+    spreadsheetIds.map(async (spreadsheetId) => {
+      const token = await client.getAccessToken();
+      const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties`;
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token.token}` } });
+      if (!res.ok) {
+        const body = await res.text();
+        throw new Error(`Sheets metadata ${res.status} for ${spreadsheetId}: ${body.slice(0, 300)}`);
+      }
+      const data = (await res.json()) as {
+        sheets?: { properties: { sheetId: number; title: string } }[];
+      };
+      const gidToTitle = new Map<string, string>();
+      for (const s of data.sheets ?? []) {
+        gidToTitle.set(String(s.properties.sheetId), s.properties.title);
+      }
+      bySpreadsheet.set(spreadsheetId, gidToTitle);
+    }),
+  );
+
+  return bySpreadsheet;
+}
+
+async function fetchSheetRows(auth: GoogleAuth, spreadsheetId: string, tabName: string): Promise<Row[]> {
   const client = await auth.getClient();
   const token = await client.getAccessToken();
+  const range = `'${tabName}'`;
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?majorDimension=ROWS&valueRenderOption=UNFORMATTED_VALUE`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token.token}` } });
   if (!res.ok) {
@@ -107,11 +146,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       globalExits: parseSheetRef(process.env.SHEET_GLOBAL_EXITS, 'SHEET_GLOBAL_EXITS'),
     };
 
+    const gidTitles = await resolveGidsToTitles(auth, Object.values(refs));
+
+    const titleFor = (ref: SheetRef): string => {
+      if (ref.tabName) return ref.tabName;
+      if (ref.gid) {
+        const title = gidTitles.get(ref.spreadsheetId)?.get(ref.gid);
+        if (!title) throw new Error(`No tab with gid=${ref.gid} found in spreadsheet ${ref.spreadsheetId}`);
+        return title;
+      }
+      throw new Error(`Sheet ref for ${ref.spreadsheetId} has no tab name or gid`);
+    };
+
     const [headcount, exitsYtd, noticePeriod, globalExits] = await Promise.all([
-      fetchSheetRows(auth, refs.headcount.spreadsheetId, refs.headcount.range),
-      fetchSheetRows(auth, refs.exitsYtd.spreadsheetId, refs.exitsYtd.range),
-      fetchSheetRows(auth, refs.noticePeriod.spreadsheetId, refs.noticePeriod.range),
-      fetchSheetRows(auth, refs.globalExits.spreadsheetId, refs.globalExits.range),
+      fetchSheetRows(auth, refs.headcount.spreadsheetId, titleFor(refs.headcount)),
+      fetchSheetRows(auth, refs.exitsYtd.spreadsheetId, titleFor(refs.exitsYtd)),
+      fetchSheetRows(auth, refs.noticePeriod.spreadsheetId, titleFor(refs.noticePeriod)),
+      fetchSheetRows(auth, refs.globalExits.spreadsheetId, titleFor(refs.globalExits)),
     ]);
 
     // Cache briefly at the edge so rapid page reloads don't re-hit Sheets on every request,
