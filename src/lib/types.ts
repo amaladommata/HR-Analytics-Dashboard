@@ -112,4 +112,6 @@ export interface DataBundle {
   unresolvedCount: number;
   totalInactive: number;
   teamClientCoverage: { mapped: number; total: number };
+  /** 'live' = read from Google Sheets just now; 'bundled' = fell back to the CSV snapshot baked into the build. */
+  source: 'live' | 'bundled';
 }

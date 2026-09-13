@@ -11,8 +11,18 @@ import type {
   NoticePeriodRow,
 } from './types';
 
-function loadGlobalExits(): GlobalExitRow[] {
-  const rows = parseCsv<Record<string, string>>(globalExitsRaw);
+type Row = Record<string, string>;
+
+interface RawRows {
+  headcount: Row[];
+  exitsYtd: Row[];
+  noticePeriod: Row[];
+  globalExits: Row[];
+  /** Where these rows came from — surfaced in the UI so it's obvious whether live data loaded. */
+  source: 'live' | 'bundled';
+}
+
+function loadGlobalExits(rows: Row[]): GlobalExitRow[] {
   return rows
     .map((r) => ({
       mmid: cleanStr(r['MMID']),
@@ -33,8 +43,7 @@ function loadGlobalExits(): GlobalExitRow[] {
     .filter((r) => r.mmid);
 }
 
-function loadExitsYtd(): ExitsYtdRow[] {
-  const rows = parseCsv<Record<string, string>>(exitsYtdRaw);
+function loadExitsYtd(rows: Row[]): ExitsYtdRow[] {
   return rows
     .map((r) => ({
       mmid: cleanStr(r['MMID']),
@@ -64,8 +73,7 @@ function loadExitsYtd(): ExitsYtdRow[] {
     .filter((r) => r.mmid);
 }
 
-function loadNoticePeriod(): NoticePeriodRow[] {
-  const rows = parseCsv<Record<string, string>>(noticePeriodRaw);
+function loadNoticePeriod(rows: Row[]): NoticePeriodRow[] {
   return rows
     .map((r) => ({
       mmid: cleanStr(r['MMID']),
@@ -106,13 +114,12 @@ function buildTeamClientLookup(
   return lookup;
 }
 
-export function loadDataBundle(): DataBundle {
-  const globalExits = loadGlobalExits();
-  const exitsYtd = loadExitsYtd();
-  const noticePeriod = loadNoticePeriod();
-  const headcountRows = parseCsv<Record<string, string>>(headcountRaw).filter(
-    (r) => cleanStr(r['Mediamint id']),
-  );
+/** Pure transform from raw parsed rows (however sourced) into the joined DataBundle. */
+function buildDataBundle(raw: RawRows): DataBundle {
+  const globalExits = loadGlobalExits(raw.globalExits);
+  const exitsYtd = loadExitsYtd(raw.exitsYtd);
+  const noticePeriod = loadNoticePeriod(raw.noticePeriod);
+  const headcountRows = raw.headcount.filter((r) => cleanStr(r['Mediamint id']));
 
   const globalByMmid = new Map<string, GlobalExitRow>();
   for (const r of globalExits) if (!globalByMmid.has(r.mmid)) globalByMmid.set(r.mmid, r);
@@ -196,5 +203,33 @@ export function loadDataBundle(): DataBundle {
     unresolvedCount,
     totalInactive,
     teamClientCoverage: { mapped: mappedTeams.size, total: totalActiveTeams.size },
+    source: raw.source,
   };
+}
+
+function loadBundledCsvRows(): RawRows {
+  return {
+    headcount: parseCsv<Row>(headcountRaw),
+    exitsYtd: parseCsv<Row>(exitsYtdRaw),
+    noticePeriod: parseCsv<Row>(noticePeriodRaw),
+    globalExits: parseCsv<Row>(globalExitsRaw),
+    source: 'bundled',
+  };
+}
+
+/** Tries the live Google Sheets API endpoint first (see api/sheets-data.ts); falls back to the bundled CSV snapshot if it's unavailable (e.g. local `vite dev` without `vercel dev`, or sheets not configured yet). */
+async function loadRawRows(): Promise<RawRows> {
+  try {
+    const res = await fetch('/api/sheets-data', { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) throw new Error(`sheets-data ${res.status}`);
+    const json = (await res.json()) as Omit<RawRows, 'source'>;
+    return { ...json, source: 'live' };
+  } catch {
+    return loadBundledCsvRows();
+  }
+}
+
+export async function loadDataBundle(): Promise<DataBundle> {
+  const raw = await loadRawRows();
+  return buildDataBundle(raw);
 }
