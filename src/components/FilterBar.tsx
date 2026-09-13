@@ -25,6 +25,7 @@ const LABELS: Record<keyof Filters, string> = {
   teamName: 'Team',
   reasonsCategory: 'Exit Reason',
   voluntary: 'Voluntary/Involuntary',
+  deliveryHead: 'Delivery Head',
 };
 
 export function FilterBar({ filters, options, onChange, onReset }: FilterBarProps) {

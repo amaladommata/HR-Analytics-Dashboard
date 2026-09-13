@@ -107,6 +107,7 @@ export interface Filters {
   teamName: string[];
   reasonsCategory: string[];
   voluntary: string[];
+  deliveryHead: string[];
 }
 
 export interface DataBundle {

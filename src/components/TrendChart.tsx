@@ -18,7 +18,7 @@ export function TrendChart({
 }: TrendChartProps) {
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-      <h3 className="mb-3 text-sm font-semibold text-gray-700">{title}</h3>
+      <h3 className="mb-3 text-sm font-bold text-slate-800">{title}</h3>
       <ResponsiveContainer width="100%" height={240}>
         <LineChart data={data} margin={{ top: 20, right: 12, left: -12, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#eee" />

@@ -88,7 +88,7 @@ export function AttritionPage({ data, filters, asOf, onFilterToggle }: Attrition
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-slate-700">Top exit reasons ({period.label})</h3>
+            <h3 className="text-sm font-bold text-slate-800">Top exit reasons ({period.label})</h3>
             <span className="text-xs text-slate-400">click to filter + break down</span>
           </div>
           <div className="flex flex-col gap-2">
@@ -118,7 +118,7 @@ export function AttritionPage({ data, filters, asOf, onFilterToggle }: Attrition
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h3 className="mb-3 text-sm font-semibold text-slate-700">
+          <h3 className="mb-3 text-sm font-bold text-slate-800">
             Top client attrition ({period.label}, min. 15 avg HC)
           </h3>
           <div className="flex flex-col gap-2">
@@ -206,6 +206,8 @@ export function AttritionPage({ data, filters, asOf, onFilterToggle }: Attrition
           filters={filters}
           limit={8}
           mode="count"
+          filterKey="deliveryHead"
+          onFilterToggle={onFilterToggle}
         />
         <BreakdownTable
           title={`Exits by Team (${period.label})`}
