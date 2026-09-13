@@ -1,4 +1,4 @@
-import type { Employee, Filters } from './types';
+import type { Employee, Filters, NoticePeriodRow } from './types';
 
 /** A dimension with no selections matches everything; otherwise the employee's value must be one of the selected values (OR). */
 function matchesDimension(selected: string[], value: string | null): boolean {
@@ -17,6 +17,21 @@ export function matchesFilters(e: Employee, filters: Filters): boolean {
   if (!matchesDimension(filters.voluntary, e.voluntary)) return false;
   if (!matchesDimension(filters.deliveryHead, e.deliveryHead)) return false;
   if (!matchesDimension(filters.billingType, e.billingType)) return false;
+  return true;
+}
+
+/**
+ * Notice Period rows don't carry every dimension Employee does (no gender,
+ * employee type, reason category, etc.), so this only checks the ones that
+ * exist on NoticePeriodRow. Shared by the Notice Period page and the
+ * Summary page's "on notice" tile so they never disagree.
+ */
+export function matchesNoticeFilters(r: NoticePeriodRow, filters: Filters): boolean {
+  if (!matchesDimension(filters.client, r.client || null)) return false;
+  if (!matchesDimension(filters.grade, r.grade || null)) return false;
+  if (!matchesDimension(filters.serviceArea, r.serviceArea || null)) return false;
+  if (!matchesDimension(filters.teamName, r.team || null)) return false;
+  if (!matchesDimension(filters.deliveryHead, r.deliveryHead || null)) return false;
   return true;
 }
 
@@ -144,21 +159,24 @@ export interface ClientAttrition {
   attritionPct: number;
 }
 
-/** top_client_attrition: group by Client, exclude avgHeadcount < minHc (small-base noise), sort desc. */
+/** top_client_attrition: group by Client (within the active filters), exclude avgHeadcount < minHc (small-base noise), sort desc. */
 export function topClientAttrition(
   employees: Employee[],
   periodStart: Date,
   periodEnd: Date,
+  filters: Filters = EMPTY_FILTERS,
   limit = 8,
   minHc = 15,
 ): ClientAttrition[] {
-  const clients = new Set(employees.map((e) => e.client).filter((c): c is string => !!c));
+  const clients = new Set(
+    employees.filter((e) => matchesFilters(e, filters)).map((e) => e.client).filter((c): c is string => !!c),
+  );
   const results: ClientAttrition[] = [];
   for (const client of clients) {
-    const filters = { ...EMPTY_FILTERS, client: [client] };
-    const avgHc = avgHeadcount(employees, periodStart, periodEnd, filters);
+    const clientFilters = { ...filters, client: [client] };
+    const avgHc = avgHeadcount(employees, periodStart, periodEnd, clientFilters);
     if (avgHc < minHc) continue;
-    const exits = exitsInPeriod(employees, periodStart, periodEnd, filters).length;
+    const exits = exitsInPeriod(employees, periodStart, periodEnd, clientFilters).length;
     results.push({ client, exits, avgHc, attritionPct: (exits / avgHc) * 100 });
   }
   return results.sort((a, b) => b.attritionPct - a.attritionPct).slice(0, limit);

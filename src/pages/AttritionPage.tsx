@@ -48,8 +48,8 @@ export function AttritionPage({ data, filters, asOf, onFilterToggle }: Attrition
     [employees, period, filters],
   );
   const clientAttrition = useMemo(
-    () => topClientAttrition(employees, period.start, period.end),
-    [employees, period],
+    () => topClientAttrition(employees, period.start, period.end, filters),
+    [employees, period, filters],
   );
 
   // The drill-down panel only makes sense for a single selected reason; skip it when 0 or 2+ are selected.
