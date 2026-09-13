@@ -29,9 +29,9 @@ interface EmployeeDetailTableProps {
   filenamePrefix: string;
 }
 
-/** Full employee-level detail, collapsed by default (this can be a lot of rows) with a CSV export that always includes every matching row, not just what's currently rendered on screen. */
+/** Full employee-level detail, open by default, with a CSV export that always includes every matching row, not just what's currently rendered on screen (only the first 50 render, for performance). */
 export function EmployeeDetailTable({ title, employees, filenamePrefix }: EmployeeDetailTableProps) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const VISIBLE_ROWS = 50;
 
   const exportCsv = () => {

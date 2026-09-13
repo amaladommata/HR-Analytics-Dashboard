@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Users, TrendingDown, CalendarClock, AlertTriangle, UserMinus } from 'lucide-react';
 import type { DataBundle, Filters } from '../lib/types';
-import { attritionPct, exitsInPeriod, headcount } from '../lib/calc';
+import { attritionPct, exitsInPeriod, headcount, matchesFilters, matchesNoticeFilters } from '../lib/calc';
 import { rolling13Months } from '../lib/periods';
 import { Tile } from '../components/Tile';
 import { TrendChart } from '../components/TrendChart';
@@ -27,9 +27,11 @@ export function SummaryPage({ data, filters, asOf, onNavigate }: SummaryPageProp
     () =>
       months.map((p) => ({
         label: p.label,
-        value: employees.filter((e) => e.doj && e.doj >= p.start && e.doj <= p.end).length,
+        value: employees.filter(
+          (e) => matchesFilters(e, filters) && e.doj && e.doj >= p.start && e.doj <= p.end,
+        ).length,
       })),
-    [employees, months],
+    [employees, months, filters],
   );
 
   const avgHcTrend = useMemo(
@@ -55,7 +57,10 @@ export function SummaryPage({ data, filters, asOf, onNavigate }: SummaryPageProp
     [employees, months, filters],
   );
 
-  const onNotice = useMemo(() => noticePeriod.filter((r) => r.lwd && r.lwd > asOf).length, [noticePeriod, asOf]);
+  const onNotice = useMemo(
+    () => noticePeriod.filter((r) => r.lwd && r.lwd > asOf && matchesNoticeFilters(r, filters)).length,
+    [noticePeriod, asOf, filters],
+  );
 
   return (
     <div className="flex flex-col gap-4">

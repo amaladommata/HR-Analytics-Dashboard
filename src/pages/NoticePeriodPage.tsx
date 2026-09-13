@@ -1,42 +1,28 @@
 import { useMemo, useState } from 'react';
 import type { DataBundle, Filters, GlobalExitRow } from '../lib/types';
+import { matchesFilters, matchesNoticeFilters } from '../lib/calc';
 import { currentPeriod, rolling13Months, type Grain } from '../lib/periods';
 import { Tile } from '../components/Tile';
 import { GrainToggle } from '../components/GrainToggle';
 import { TrendChart } from '../components/TrendChart';
 
-function matchesNoticeFilters(r: DataBundle['noticePeriod'][number], filters: Filters): boolean {
-  if (filters.client.length && !filters.client.includes(r.client)) return false;
-  if (filters.grade.length && !filters.grade.includes(r.grade)) return false;
-  if (filters.serviceArea.length && !filters.serviceArea.includes(r.serviceArea)) return false;
-  if (filters.teamName.length && !filters.teamName.includes(r.team)) return false;
-  return true;
-}
-
-interface Resignation {
-  mmid: string;
-  date: Date;
-  grade: string;
-  serviceArea: string;
-}
-
-/** Historical resignation events, deduped by MMID, preferring Global Exits' Date of Resignation (all-time) with Exits-YTD as fallback (richer for the current FY). */
-function buildResignationHistory(
-  globalExits: GlobalExitRow[],
-  exitsYtd: DataBundle['exitsYtd'],
-): Resignation[] {
-  const byMmid = new Map<string, Resignation>();
+/**
+ * Resignation date per MMID, deduped, preferring Global Exits' Date of
+ * Resignation (all-time) with Exits-YTD as fallback (richer for the current
+ * FY). Returns a plain mmid->date map rather than carrying its own
+ * client/grade/etc. copies — those are joined from the fully-resolved
+ * Employee record below instead, so filtering here uses the exact same
+ * client/team/grade resolution as everywhere else on the dashboard.
+ */
+function buildResignationDates(globalExits: GlobalExitRow[], exitsYtd: DataBundle['exitsYtd']): Map<string, Date> {
+  const byMmid = new Map<string, Date>();
   for (const r of globalExits) {
-    if (r.dateOfResignation) {
-      byMmid.set(r.mmid, { mmid: r.mmid, date: r.dateOfResignation, grade: r.grade, serviceArea: r.serviceArea });
-    }
+    if (r.dateOfResignation) byMmid.set(r.mmid, r.dateOfResignation);
   }
   for (const r of exitsYtd) {
-    if (!byMmid.has(r.mmid) && r.resignationDate) {
-      byMmid.set(r.mmid, { mmid: r.mmid, date: r.resignationDate, grade: r.grade, serviceArea: r.serviceArea });
-    }
+    if (!byMmid.has(r.mmid) && r.resignationDate) byMmid.set(r.mmid, r.resignationDate);
   }
-  return [...byMmid.values()];
+  return byMmid;
 }
 
 interface NoticePeriodPageProps {
@@ -47,7 +33,7 @@ interface NoticePeriodPageProps {
 }
 
 export function NoticePeriodPage({ data, filters, asOf, onFilterToggle }: NoticePeriodPageProps) {
-  const { noticePeriod, globalExits, exitsYtd } = data;
+  const { employees, noticePeriod, globalExits, exitsYtd } = data;
   const [grain, setGrain] = useState<Grain>('monthly');
 
   const period = useMemo(() => currentPeriod(grain, asOf), [grain, asOf]);
@@ -56,14 +42,22 @@ export function NoticePeriodPage({ data, filters, asOf, onFilterToggle }: Notice
     [noticePeriod, filters],
   );
 
-  const resignationHistory = useMemo(
-    () => buildResignationHistory(globalExits, exitsYtd),
-    [globalExits, exitsYtd],
-  );
+  // Resignation dates, filtered by joining each MMID through the fully-resolved
+  // Employee record (same client/team/grade resolution as everywhere else).
+  const resignationDates = useMemo(() => buildResignationDates(globalExits, exitsYtd), [globalExits, exitsYtd]);
+  const employeeByMmid = useMemo(() => new Map(employees.map((e) => [e.mmid, e])), [employees]);
+  const filteredResignations = useMemo(() => {
+    const list: { mmid: string; date: Date }[] = [];
+    for (const [mmid, date] of resignationDates) {
+      const employee = employeeByMmid.get(mmid);
+      if (employee && matchesFilters(employee, filters)) list.push({ mmid, date });
+    }
+    return list;
+  }, [resignationDates, employeeByMmid, filters]);
 
   const resignationsInPeriod = useMemo(
-    () => resignationHistory.filter((r) => r.date >= period.start && r.date <= period.end).length,
-    [resignationHistory, period],
+    () => filteredResignations.filter((r) => r.date >= period.start && r.date <= period.end).length,
+    [filteredResignations, period],
   );
 
   const onNotice = useMemo(
@@ -75,9 +69,9 @@ export function NoticePeriodPage({ data, filters, asOf, onFilterToggle }: Notice
     () =>
       rolling13Months(asOf).map((p) => ({
         label: p.label,
-        value: resignationHistory.filter((r) => r.date >= p.start && r.date <= p.end).length,
+        value: filteredResignations.filter((r) => r.date >= p.start && r.date <= p.end).length,
       })),
-    [resignationHistory, asOf],
+    [filteredResignations, asOf],
   );
 
   const byTeam = useMemo(() => {
