@@ -3,16 +3,19 @@ import { AlertTriangle } from 'lucide-react';
 interface DataQualityBannerProps {
   unresolvedCount: number;
   totalInactive: number;
-  teamClientCoverage: { mapped: number; total: number };
+  clientCoverage: { direct: number; lookup: number; total: number };
   onViewList: () => void;
 }
 
 export function DataQualityBanner({
   unresolvedCount,
   totalInactive,
-  teamClientCoverage,
+  clientCoverage,
   onViewList,
 }: DataQualityBannerProps) {
+  const mapped = clientCoverage.direct + clientCoverage.lookup;
+  const pct = clientCoverage.total > 0 ? Math.round((mapped / clientCoverage.total) * 100) : 0;
+
   return (
     <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-sm text-amber-900">
       <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" />
@@ -25,12 +28,15 @@ export function DataQualityBanner({
         </button>
         . Headcount otherwise matches the source Status column exactly for today and uses resolved exit
         dates for past dates.{' '}
-        {teamClientCoverage.total > 0 && (
+        {clientCoverage.total > 0 && (
           <>
-            Client is mapped via a Team-name lookup covering {teamClientCoverage.mapped} of{' '}
-            {teamClientCoverage.total} active teams (
-            {Math.round((teamClientCoverage.mapped / teamClientCoverage.total) * 100)}%) — Billing Type
-            and PG Rating have no source for active employees in this export.
+            Client is known for {mapped} of {clientCoverage.total} active employees ({pct}%
+            {clientCoverage.direct > 0 && clientCoverage.lookup > 0
+              ? ` — ${clientCoverage.direct} from the sheet's own Client column, ${clientCoverage.lookup} reconstructed via a Team-name lookup`
+              : clientCoverage.lookup > 0
+                ? " — reconstructed via a Team-name lookup (Headcount has no Client column)"
+                : ''}
+            ) — Billing Type and PG Rating still have no source for active employees in this export.
           </>
         )}
       </p>

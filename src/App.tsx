@@ -126,7 +126,7 @@ function App() {
         <DataQualityBanner
           unresolvedCount={data.unresolvedCount}
           totalInactive={data.totalInactive}
-          teamClientCoverage={data.teamClientCoverage}
+          clientCoverage={data.clientCoverage}
           onViewList={() => setShowUnresolved(true)}
         />
 

@@ -1,16 +1,51 @@
 import Papa from 'papaparse';
 
-/** Parses "YYYY-MM-DD ..." / "YYYY-MM-DD" strings as local dates. Returns null for blank/invalid input. */
+const MONTHS: Record<string, number> = {
+  jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+  jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+};
+
+/**
+ * Parses dates in whichever format the row actually carries:
+ *   - "YYYY-MM-DD" / "YYYY-MM-DD HH:MM:SS" (the CSV export format)
+ *   - "DD-Mon-YYYY" / "D-Mon-YY" (a common Google Sheets text/display format,
+ *     e.g. "01-Dec-2019" — seen directly in the live sheet)
+ *   - "MM/DD/YYYY" (another common spreadsheet format)
+ * Returns null for blank/invalid input rather than guessing.
+ */
 export function parseDate(value: string | undefined | null): Date | null {
   if (!value) return null;
   const trimmed = value.trim();
   if (!trimmed || trimmed === 'NA' || trimmed === '#REF!') return null;
-  const datePart = trimmed.slice(0, 10);
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(datePart);
-  if (!m) return null;
-  const [, y, mo, d] = m;
-  const date = new Date(Number(y), Number(mo) - 1, Number(d));
-  return Number.isNaN(date.getTime()) ? null : date;
+
+  // YYYY-MM-DD (optionally with a time suffix, which is ignored)
+  const isoMatch = /^(\d{4})-(\d{2})-(\d{2})/.exec(trimmed);
+  if (isoMatch) {
+    const [, y, mo, d] = isoMatch;
+    const date = new Date(Number(y), Number(mo) - 1, Number(d));
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  // DD-Mon-YYYY or D-Mon-YY, e.g. "01-Dec-2019", "1-Dec-19"
+  const monthNameMatch = /^(\d{1,2})-([A-Za-z]{3,})-(\d{2,4})$/.exec(trimmed);
+  if (monthNameMatch) {
+    const [, d, monRaw, yRaw] = monthNameMatch;
+    const month = MONTHS[monRaw.slice(0, 3).toLowerCase()];
+    if (month === undefined) return null;
+    const year = yRaw.length === 2 ? 2000 + Number(yRaw) : Number(yRaw);
+    const date = new Date(year, month, Number(d));
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  // MM/DD/YYYY
+  const slashMatch = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(trimmed);
+  if (slashMatch) {
+    const [, mo, d, y] = slashMatch;
+    const date = new Date(Number(y), Number(mo) - 1, Number(d));
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  return null;
 }
 
 export function cleanStr(value: string | undefined | null): string {

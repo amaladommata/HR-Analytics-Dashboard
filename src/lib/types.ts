@@ -18,7 +18,7 @@ export interface Employee {
   resourceCapability: string;
 
   client: string | null;
-  clientSource: 'lookup' | null;
+  clientSource: 'direct' | 'lookup' | null;
 
   exitDateResolved: Date | null;
   exitSource: ExitSource;
@@ -117,7 +117,7 @@ export interface DataBundle {
   noticePeriod: NoticePeriodRow[];
   unresolvedCount: number;
   totalInactive: number;
-  teamClientCoverage: { mapped: number; total: number };
+  clientCoverage: { direct: number; lookup: number; total: number };
   /** 'live' = read from Google Sheets just now; 'bundled' = fell back to the CSV snapshot baked into the build. */
   source: 'live' | 'bundled';
 }
