@@ -39,7 +39,14 @@ function buildResignationHistory(
   return [...byMmid.values()];
 }
 
-export function NoticePeriodPage({ data, filters, asOf }: { data: DataBundle; filters: Filters; asOf: Date }) {
+interface NoticePeriodPageProps {
+  data: DataBundle;
+  filters: Filters;
+  asOf: Date;
+  onFilterToggle: (key: keyof Filters, value: string) => void;
+}
+
+export function NoticePeriodPage({ data, filters, asOf, onFilterToggle }: NoticePeriodPageProps) {
   const { noticePeriod, globalExits, exitsYtd } = data;
   const [grain, setGrain] = useState<Grain>('monthly');
 
@@ -109,22 +116,37 @@ export function NoticePeriodPage({ data, filters, asOf }: { data: DataBundle; fi
     return [...groups.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
   }, [filtered]);
 
-  const bar = (label: string, count: number, denom: number, color: string) => (
-    <div key={label} className="flex items-center gap-2 text-sm">
-      <span className="w-32 truncate text-gray-600" title={label}>
-        {label}
-      </span>
-      <div className="h-2 flex-1 rounded-full bg-gray-100">
-        <div className={`h-2 rounded-full ${color}`} style={{ width: `${denom ? (count / denom) * 100 : 0}%` }} />
+  const bar = (
+    label: string,
+    count: number,
+    denom: number,
+    color: string,
+    filterKey?: keyof Filters,
+  ) => {
+    const clickable = filterKey && label !== 'Unknown';
+    const selected = filterKey && filters[filterKey] === label;
+    return (
+      <div
+        key={label}
+        onClick={() => clickable && onFilterToggle(filterKey, label)}
+        className={`flex items-center gap-2 rounded text-sm ${
+          clickable ? 'cursor-pointer px-1 py-0.5 hover:bg-teal-50' : ''
+        } ${selected ? 'bg-teal-50 ring-1 ring-teal-300' : ''}`}
+      >
+        <span className="w-32 truncate text-slate-600" title={label}>
+          {label}
+        </span>
+        <div className="h-2 flex-1 rounded-full bg-slate-100">
+          <div className={`h-2 rounded-full ${color}`} style={{ width: `${denom ? (count / denom) * 100 : 0}%` }} />
+        </div>
+        <span className="w-8 text-right text-slate-700">{count}</span>
       </div>
-      <span className="w-8 text-right text-gray-700">{count}</span>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-800">Notice Period</h2>
+      <div className="flex items-center justify-end">
         <GrainToggle value={grain} onChange={setGrain} />
       </div>
 
@@ -145,35 +167,35 @@ export function NoticePeriodPage({ data, filters, asOf }: { data: DataBundle; fi
       />
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-          <h3 className="mb-3 text-sm font-semibold text-gray-700">On Notice — By Team</h3>
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <h3 className="mb-3 text-sm font-semibold text-slate-700">On Notice — By Team</h3>
           <div className="flex flex-col gap-2">
-            {byTeam.map(([team, count]) => bar(team, count, filtered.length, 'bg-teal-600'))}
-            {byTeam.length === 0 && <p className="text-sm text-gray-400">No data</p>}
+            {byTeam.map(([team, count]) => bar(team, count, filtered.length, 'bg-teal-600', 'teamName'))}
+            {byTeam.length === 0 && <p className="text-sm text-slate-400">No data</p>}
           </div>
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-          <h3 className="mb-3 text-sm font-semibold text-gray-700">On Notice — By Exit Reason Category</h3>
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <h3 className="mb-3 text-sm font-semibold text-slate-700">On Notice — By Exit Reason Category</h3>
           <div className="flex flex-col gap-2">
             {byReason.map(([reason, count]) => bar(reason, count, filtered.length, 'bg-teal-500'))}
-            {byReason.length === 0 && <p className="text-sm text-gray-400">No data</p>}
+            {byReason.length === 0 && <p className="text-sm text-slate-400">No data</p>}
           </div>
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-          <h3 className="mb-3 text-sm font-semibold text-gray-700">On Notice — By Grade</h3>
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <h3 className="mb-3 text-sm font-semibold text-slate-700">On Notice — By Grade</h3>
           <div className="flex flex-col gap-2">
-            {byGrade.map(([grade, count]) => bar(grade, count, filtered.length, 'bg-cyan-600'))}
-            {byGrade.length === 0 && <p className="text-sm text-gray-400">No data</p>}
+            {byGrade.map(([grade, count]) => bar(grade, count, filtered.length, 'bg-cyan-600', 'grade'))}
+            {byGrade.length === 0 && <p className="text-sm text-slate-400">No data</p>}
           </div>
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-          <h3 className="mb-3 text-sm font-semibold text-gray-700">On Notice — By Service Area</h3>
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <h3 className="mb-3 text-sm font-semibold text-slate-700">On Notice — By Service Area</h3>
           <div className="flex flex-col gap-2">
-            {byServiceArea.map(([area, count]) => bar(area, count, filtered.length, 'bg-cyan-500'))}
-            {byServiceArea.length === 0 && <p className="text-sm text-gray-400">No data</p>}
+            {byServiceArea.map(([area, count]) => bar(area, count, filtered.length, 'bg-cyan-500', 'serviceArea'))}
+            {byServiceArea.length === 0 && <p className="text-sm text-slate-400">No data</p>}
           </div>
         </div>
       </div>

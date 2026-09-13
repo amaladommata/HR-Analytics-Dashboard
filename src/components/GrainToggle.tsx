@@ -8,13 +8,13 @@ const GRAINS: { key: Grain; label: string }[] = [
 
 export function GrainToggle({ value, onChange }: { value: Grain; onChange: (g: Grain) => void }) {
   return (
-    <div className="inline-flex rounded-lg border border-gray-300 bg-white p-0.5 text-sm">
+    <div className="inline-flex rounded-lg border border-slate-300 bg-white p-0.5 text-sm">
       {GRAINS.map((g) => (
         <button
           key={g.key}
           onClick={() => onChange(g.key)}
           className={`rounded-md px-3 py-1 ${
-            value === g.key ? 'bg-teal-700 text-white' : 'text-gray-600 hover:bg-gray-100'
+            value === g.key ? 'bg-teal-700 text-white' : 'text-slate-600 hover:bg-slate-100'
           }`}
         >
           {g.label}

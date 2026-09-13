@@ -8,10 +8,16 @@ import { TrendChart } from '../components/TrendChart';
 import { BreakdownTable } from '../components/BreakdownTable';
 import { DrillDownPanel } from '../components/DrillDownPanel';
 
-export function AttritionPage({ data, filters, asOf }: { data: DataBundle; filters: Filters; asOf: Date }) {
+interface AttritionPageProps {
+  data: DataBundle;
+  filters: Filters;
+  asOf: Date;
+  onFilterToggle: (key: keyof Filters, value: string) => void;
+}
+
+export function AttritionPage({ data, filters, asOf, onFilterToggle }: AttritionPageProps) {
   const { employees, exitsYtd } = data;
   const [grain, setGrain] = useState<Grain>('monthly');
-  const [selectedReason, setSelectedReason] = useState<string | null>(null);
 
   const period = useMemo(() => currentPeriod(grain, asOf), [grain, asOf]);
   const pct = useMemo(
@@ -42,6 +48,7 @@ export function AttritionPage({ data, filters, asOf }: { data: DataBundle; filte
     [employees, period],
   );
 
+  const selectedReason = filters.reasonsCategory;
   const drillDown = useMemo(
     () => (selectedReason ? reasonDrillDown(exitsYtd, selectedReason, period.start, period.end) : null),
     [exitsYtd, selectedReason, period],
@@ -49,16 +56,18 @@ export function AttritionPage({ data, filters, asOf }: { data: DataBundle; filte
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-gray-800">Attrition</h2>
+      <div className="flex items-center justify-end">
         <GrainToggle value={grain} onChange={setGrain} />
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Tile label={`${period.label} Attrition %`} value={`${pct.toFixed(1)}%`} />
+        <Tile label={`${period.label} Attrition %`} value={`${pct.toFixed(1)}%`} accent="bad" />
         <Tile label={`${period.label} Exits`} value={exits.length.toLocaleString()} />
         <Tile label="Avg headcount (denominator)" value={avgHc ? avgHc.toLocaleString() : '—'} />
-        <Tile label="Voluntary exits" value={exits.filter((e) => e.voluntary === 'Voluntary').length.toLocaleString()} />
+        <Tile
+          label="Voluntary exits"
+          value={exits.filter((e) => e.voluntary === 'Voluntary').length.toLocaleString()}
+        />
       </div>
 
       <TrendChart
@@ -70,54 +79,60 @@ export function AttritionPage({ data, filters, asOf }: { data: DataBundle; filte
       />
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-        <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-gray-700">Top exit reasons ({period.label})</h3>
-            <span className="text-xs text-gray-400">click a reason to break it down</span>
+            <h3 className="text-sm font-semibold text-slate-700">Top exit reasons ({period.label})</h3>
+            <span className="text-xs text-slate-400">click to filter + break down</span>
           </div>
           <div className="flex flex-col gap-2">
             {reasons.map((r) => (
               <div
                 key={r.reason}
-                onClick={() => setSelectedReason(selectedReason === r.reason ? null : r.reason)}
+                onClick={() => onFilterToggle('reasonsCategory', r.reason)}
                 className={`flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-sm hover:bg-teal-50 ${
                   selectedReason === r.reason ? 'bg-teal-50 ring-1 ring-teal-300' : ''
                 }`}
               >
-                <span className="w-40 truncate text-gray-600" title={r.reason}>
+                <span className="w-40 truncate text-slate-600" title={r.reason}>
                   {r.reason}
                 </span>
-                <div className="h-2 flex-1 rounded-full bg-gray-100">
+                <div className="h-2 flex-1 rounded-full bg-slate-100">
                   <div className="h-2 rounded-full bg-teal-600" style={{ width: `${r.pct}%` }} />
                 </div>
-                <span className="w-10 text-right text-gray-700">{r.count}</span>
-                <span className="w-12 text-right text-xs text-gray-400">{r.pct.toFixed(0)}%</span>
+                <span className="w-10 text-right text-slate-700">{r.count}</span>
+                <span className="w-12 text-right text-xs text-slate-400">{r.pct.toFixed(0)}%</span>
               </div>
             ))}
-            {reasons.length === 0 && <p className="text-sm text-gray-400">No exits in this period</p>}
+            {reasons.length === 0 && <p className="text-sm text-slate-400">No exits in this period</p>}
           </div>
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-          <h3 className="mb-3 text-sm font-semibold text-gray-700">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <h3 className="mb-3 text-sm font-semibold text-slate-700">
             Top client attrition ({period.label}, min. 15 avg HC)
           </h3>
           <div className="flex flex-col gap-2">
             {clientAttrition.map((c) => (
-              <div key={c.client} className="flex items-center gap-2 text-sm">
-                <span className="w-32 truncate text-gray-600">{c.client}</span>
-                <div className="h-2 flex-1 rounded-full bg-gray-100">
+              <div
+                key={c.client}
+                onClick={() => onFilterToggle('client', c.client)}
+                className={`flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-sm hover:bg-teal-50 ${
+                  filters.client === c.client ? 'bg-teal-50 ring-1 ring-teal-300' : ''
+                }`}
+              >
+                <span className="w-32 truncate text-slate-600">{c.client}</span>
+                <div className="h-2 flex-1 rounded-full bg-slate-100">
                   <div
                     className="h-2 rounded-full bg-orange-500"
                     style={{ width: `${Math.min(c.attritionPct, 100)}%` }}
                   />
                 </div>
-                <span className="w-14 text-right text-xs text-gray-400">{c.exits} exits</span>
-                <span className="w-12 text-right text-gray-700">{c.attritionPct.toFixed(0)}%</span>
+                <span className="w-14 text-right text-xs text-slate-400">{c.exits} exits</span>
+                <span className="w-12 text-right text-slate-700">{c.attritionPct.toFixed(0)}%</span>
               </div>
             ))}
             {clientAttrition.length === 0 && (
-              <p className="text-sm text-gray-400">
+              <p className="text-sm text-slate-400">
                 No client meets the 15-avg-headcount threshold, or client mapping has no match for this
                 period.
               </p>
@@ -137,6 +152,8 @@ export function AttritionPage({ data, filters, asOf }: { data: DataBundle; filte
           filters={filters}
           limit={5}
           mode="count"
+          filterKey="voluntary"
+          onFilterToggle={onFilterToggle}
         />
         <BreakdownTable
           title={`Exits by Grade (${period.label})`}
@@ -146,6 +163,8 @@ export function AttritionPage({ data, filters, asOf }: { data: DataBundle; filte
           filters={filters}
           limit={8}
           mode="count"
+          filterKey="grade"
+          onFilterToggle={onFilterToggle}
         />
         <BreakdownTable
           title={`Exits by Service Area (${period.label})`}
@@ -155,6 +174,8 @@ export function AttritionPage({ data, filters, asOf }: { data: DataBundle; filte
           filters={filters}
           limit={8}
           mode="count"
+          filterKey="serviceArea"
+          onFilterToggle={onFilterToggle}
         />
         <BreakdownTable
           title={`Exits by Country (${period.label})`}
@@ -164,6 +185,8 @@ export function AttritionPage({ data, filters, asOf }: { data: DataBundle; filte
           filters={filters}
           limit={8}
           mode="count"
+          filterKey="country"
+          onFilterToggle={onFilterToggle}
         />
         <BreakdownTable
           title={`Exits by Delivery Head (${period.label})`}
@@ -182,6 +205,8 @@ export function AttritionPage({ data, filters, asOf }: { data: DataBundle; filte
           filters={filters}
           limit={8}
           mode="count"
+          filterKey="teamName"
+          onFilterToggle={onFilterToggle}
         />
       </div>
     </div>

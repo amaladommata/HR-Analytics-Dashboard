@@ -1,11 +1,20 @@
 import { useMemo } from 'react';
+import { Users, TrendingDown, CalendarClock, AlertTriangle, UserMinus } from 'lucide-react';
 import type { DataBundle, Filters } from '../lib/types';
 import { attritionPct, exitsInPeriod, headcount } from '../lib/calc';
 import { rolling13Months } from '../lib/periods';
 import { Tile } from '../components/Tile';
 import { TrendChart } from '../components/TrendChart';
+import type { Tab } from '../components/Sidebar';
 
-export function SummaryPage({ data, filters, asOf }: { data: DataBundle; filters: Filters; asOf: Date }) {
+interface SummaryPageProps {
+  data: DataBundle;
+  filters: Filters;
+  asOf: Date;
+  onNavigate: (tab: Tab) => void;
+}
+
+export function SummaryPage({ data, filters, asOf, onNavigate }: SummaryPageProps) {
   const { employees, noticePeriod } = data;
   const months = useMemo(() => rolling13Months(asOf), [asOf]);
   const latest = months[months.length - 1];
@@ -50,18 +59,35 @@ export function SummaryPage({ data, filters, asOf }: { data: DataBundle; filters
 
   return (
     <div className="flex flex-col gap-4">
-      <h2 className="text-lg font-semibold text-gray-800">Summary — {latest.label}</h2>
+      <p className="-mt-1 text-sm text-slate-500">As of {latest.label}. Click a tile to jump to that view.</p>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-        <Tile label="Headcount" value={hc.toLocaleString()} />
-        <Tile label="Exits (month)" value={exits.length.toLocaleString()} />
-        <Tile label="Attrition %" value={`${pct.toFixed(1)}%`} />
-        <Tile label="On notice" value={onNotice.toLocaleString()} />
+        <Tile label="Headcount" value={hc.toLocaleString()} icon={Users} onClick={() => onNavigate('headcount')} />
+        <Tile
+          label="Exits (month)"
+          value={exits.length.toLocaleString()}
+          icon={UserMinus}
+          onClick={() => onNavigate('attrition')}
+        />
+        <Tile
+          label="Attrition %"
+          value={`${pct.toFixed(1)}%`}
+          icon={TrendingDown}
+          accent="bad"
+          onClick={() => onNavigate('attrition')}
+        />
+        <Tile
+          label="On notice"
+          value={onNotice.toLocaleString()}
+          icon={CalendarClock}
+          onClick={() => onNavigate('notice')}
+        />
         <Tile
           label="No exit record"
           value={`${data.unresolvedCount}`}
           sublabel="InActive tag, excluded from HC"
           accent="warning"
+          icon={AlertTriangle}
         />
       </div>
 

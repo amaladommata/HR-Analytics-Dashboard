@@ -8,6 +8,8 @@ export function matchesFilters(e: Employee, filters: Filters): boolean {
   if (filters.gender && e.gender !== filters.gender) return false;
   if (filters.employeeType && e.employeeType !== filters.employeeType) return false;
   if (filters.teamName && e.teamName !== filters.teamName) return false;
+  if (filters.reasonsCategory && e.reasonsCategory !== filters.reasonsCategory) return false;
+  if (filters.voluntary && e.voluntary !== filters.voluntary) return false;
   return true;
 }
 
@@ -19,6 +21,8 @@ export const EMPTY_FILTERS: Filters = {
   gender: null,
   employeeType: null,
   teamName: null,
+  reasonsCategory: null,
+  voluntary: null,
 };
 
 /**

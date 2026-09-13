@@ -102,6 +102,8 @@ export interface Filters {
   gender: string | null;
   employeeType: string | null;
   teamName: string | null;
+  reasonsCategory: string | null;
+  voluntary: string | null;
 }
 
 export interface DataBundle {
