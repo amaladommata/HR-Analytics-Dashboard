@@ -75,6 +75,15 @@ export function HeadcountPage({ employees, filters, asOf, onFilterToggle }: Head
           onFilterToggle={onFilterToggle}
         />
         <BreakdownTable
+          title="By Billing Type"
+          employees={employees}
+          dimension={(e) => e.billingType ?? 'Unknown'}
+          asOf={period.end}
+          filters={filters}
+          filterKey="billingType"
+          onFilterToggle={onFilterToggle}
+        />
+        <BreakdownTable
           title="By Country"
           employees={employees}
           dimension={(e) => e.country}

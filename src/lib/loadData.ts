@@ -34,6 +34,8 @@ function loadGlobalExits(rows: Row[]): GlobalExitRow[] {
       dateOfResignation: parseDate(r['Date of Resignation']),
       lwd: parseDate(r['LWD']),
       confirmedLwd: parseDate(r['Confirmed LWD']),
+      dateOfAbsconding: parseDate(r['Date of absconding']),
+      terminationWithdrawalDate: parseDate(r['Date of absconding/termination withdrawal']),
       hrbp: cleanStr(r['HRBP']),
       doj: parseDate(r['Date of joining']),
       serviceArea: cleanStr(r['Service area']),
@@ -100,26 +102,54 @@ function loadNoticePeriod(rows: Row[]): NoticePeriodRow[] {
 }
 
 /**
+ * Exit-date resolution order for a Global Exits row, per HR:
+ *   1. Confirmed LWD
+ *   2. LWD
+ *   3. A populated "termination withdrawal" date means the absconding/
+ *      termination case was reversed -- the employee is active, not exited.
+ *   4. Date of absconding
+ *   5. Otherwise unresolved (no evidence either way).
+ */
+function resolveGlobalExitDate(r: GlobalExitRow): { date: Date | null; withdrawn: boolean } {
+  const confirmed = r.confirmedLwd ?? r.lwd;
+  if (confirmed) return { date: confirmed, withdrawn: false };
+  if (r.terminationWithdrawalDate) return { date: null, withdrawn: true };
+  if (r.dateOfAbsconding) return { date: r.dateOfAbsconding, withdrawn: false };
+  return { date: null, withdrawn: false };
+}
+
+/**
  * Some employees have more than one row in Global Exits for the same MMID
  * (e.g. a withdrawn resignation attempt with blank dates, followed by the
  * real exit with an LWD). Picking whichever row happens to come first in
  * the sheet was wrong — it could lock onto the blank row and mark someone
  * "unresolved" even though a real exit record exists elsewhere in the same
- * tab. Prefer any row that actually has a resolved date; among those, the
- * most recent one wins.
+ * tab. Prefer any row that actually resolves to a real exit date; among
+ * those, the most recent one wins. A row that resolves to "withdrawn" beats
+ * a row with nothing at all, but loses to a row with a real exit date.
  */
 function bestGlobalExitByMmid(rows: GlobalExitRow[]): Map<string, GlobalExitRow> {
   const best = new Map<string, GlobalExitRow>();
+  const rank = (r: GlobalExitRow) => {
+    const resolved = resolveGlobalExitDate(r);
+    if (resolved.date) return 2;
+    if (resolved.withdrawn) return 1;
+    return 0;
+  };
   for (const r of rows) {
     const existing = best.get(r.mmid);
     if (!existing) {
       best.set(r.mmid, r);
       continue;
     }
-    const existingDate = existing.confirmedLwd ?? existing.lwd;
-    const candidateDate = r.confirmedLwd ?? r.lwd;
-    if (candidateDate && (!existingDate || candidateDate > existingDate)) {
+    const existingRank = rank(existing);
+    const candidateRank = rank(r);
+    if (candidateRank > existingRank) {
       best.set(r.mmid, r);
+    } else if (candidateRank === 2 && existingRank === 2) {
+      const existingDate = resolveGlobalExitDate(existing).date!;
+      const candidateDate = resolveGlobalExitDate(r).date!;
+      if (candidateDate > existingDate) best.set(r.mmid, r);
     }
   }
   return best;
@@ -214,6 +244,7 @@ function buildDataBundle(raw: RawRows): DataBundle {
     const directClient = cleanStr(r['Client']);
     const client = directClient || teamClientLookup.get(teamName) || null;
     const clientSource: Employee['clientSource'] = directClient ? 'direct' : client ? 'lookup' : null;
+    const billingType = cleanStr(r['Billing Type']) || null;
     const deliveryHead = teamDeliveryHeadLookup.get(teamName) ?? null;
     const ey = exitsYtdByMmid.get(mmid);
 
@@ -235,6 +266,7 @@ function buildDataBundle(raw: RawRows): DataBundle {
       resourceCapability: cleanStr(r['Resource Capability']),
       client,
       clientSource,
+      billingType,
       exitDateResolved: null,
       exitSource: null,
       exitUnresolved: false,
@@ -253,12 +285,16 @@ function buildDataBundle(raw: RawRows): DataBundle {
   //    Uses the best (most-complete) row per MMID — see bestGlobalExitByMmid.
   for (const r of globalExitsByMmid.values()) {
     if (seenMmids.has(r.mmid)) continue;
+    const resolved = resolveGlobalExitDate(r);
+    // A withdrawn absconding/termination case is not an exit at all -- skip it entirely
+    // (it's neither counted active here nor flagged as an unresolved exit).
+    if (resolved.withdrawn) continue;
     seenMmids.add(r.mmid);
     totalInactive += 1;
 
     const ey = exitsYtdByMmid.get(r.mmid);
     const doj = r.doj ?? ey?.doj ?? null;
-    const exitDateResolved = r.confirmedLwd ?? r.lwd ?? ey?.lwd ?? null;
+    const exitDateResolved = resolved.date ?? ey?.lwd ?? null;
     const exitUnresolved = !doj || !exitDateResolved;
     if (exitUnresolved) unresolvedCount += 1;
 
@@ -283,6 +319,7 @@ function buildDataBundle(raw: RawRows): DataBundle {
       resourceCapability: '',
       client,
       clientSource: client ? 'lookup' : null,
+      billingType: null,
       exitDateResolved,
       exitSource: 'global',
       exitUnresolved,
@@ -324,6 +361,7 @@ function buildDataBundle(raw: RawRows): DataBundle {
       resourceCapability: '',
       client,
       clientSource: client ? 'lookup' : null,
+      billingType: null,
       exitDateResolved,
       exitSource: 'exits_ytd',
       exitUnresolved,
@@ -341,6 +379,7 @@ function buildDataBundle(raw: RawRows): DataBundle {
     lookup: activeEmployees.filter((e) => e.clientSource === 'lookup').length,
     total: activeEmployees.length,
   };
+  const billingTypeKnown = activeEmployees.filter((e) => e.billingType).length;
 
   return {
     employees,
@@ -350,6 +389,7 @@ function buildDataBundle(raw: RawRows): DataBundle {
     unresolvedCount,
     totalInactive,
     clientCoverage,
+    billingTypeKnown,
     source: raw.source,
   };
 }
