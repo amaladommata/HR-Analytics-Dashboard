@@ -114,61 +114,62 @@ function buildTeamClientLookup(
   return lookup;
 }
 
-/** Pure transform from raw parsed rows (however sourced) into the joined DataBundle. */
+/**
+ * Pure transform from raw parsed rows (however sourced) into the joined
+ * DataBundle.
+ *
+ * The Headcount tab now lists ONLY currently-active employees — it no
+ * longer carries anyone who has exited. So the full employee population for
+ * date-based headcount/attrition has to be assembled from two places:
+ *   1. Headcount tab -> today's active employees (always active from their
+ *      DOJ onward; exitDateResolved stays null).
+ *   2. Global Exits (all-time ledger, preferred) -> everyone who has ever
+ *      exited, with their own DOJ and resolved exit date (Confirmed LWD,
+ *      falling back to LWD). Exits-YTD fills in anyone missing from Global
+ *      Exits (e.g. a very recent exit not yet in the all-time ledger).
+ * isActiveAsOf() (calc.ts) then does date <= exitDateResolved as before —
+ * unchanged, since that logic was already correct; only the population
+ * feeding it needed to change.
+ */
 function buildDataBundle(raw: RawRows): DataBundle {
   const globalExits = loadGlobalExits(raw.globalExits);
   const exitsYtd = loadExitsYtd(raw.exitsYtd);
   const noticePeriod = loadNoticePeriod(raw.noticePeriod);
-  const headcountRows = raw.headcount.filter((r) => cleanStr(r['Mediamint id']));
-
-  const globalByMmid = new Map<string, GlobalExitRow>();
-  for (const r of globalExits) if (!globalByMmid.has(r.mmid)) globalByMmid.set(r.mmid, r);
+  // The Headcount tab is meant to hold only currently-active employees now, but stay
+  // defensive: if a Status column is still present, honor it rather than assume every
+  // row is active (matters for the bundled CSV fallback, which predates this change).
+  const headcountRows = raw.headcount.filter((r) => {
+    if (!cleanStr(r['Mediamint id'])) return false;
+    const status = cleanStr(r['Status']);
+    return !status || status === 'Active';
+  });
 
   const exitsYtdByMmid = new Map<string, ExitsYtdRow>();
   for (const r of exitsYtd) if (!exitsYtdByMmid.has(r.mmid)) exitsYtdByMmid.set(r.mmid, r);
 
   const teamClientLookup = buildTeamClientLookup(exitsYtd, noticePeriod);
 
-  let unresolvedCount = 0;
-  let totalInactive = 0;
+  const employees: Employee[] = [];
+  const seenMmids = new Set<string>();
 
-  const employees: Employee[] = headcountRows.map((r) => {
+  // 1. Active employees, straight from the Headcount tab.
+  for (const r of headcountRows) {
     const mmid = cleanStr(r['Mediamint id']);
-    const status = cleanStr(r['Status']) === 'Active' ? 'Active' : 'InActive';
+    if (!mmid || seenMmids.has(mmid)) continue;
+    seenMmids.add(mmid);
+
     const teamName = cleanStr(r['Team name']);
-
-    let exitDateResolved: Date | null = null;
-    let exitSource: Employee['exitSource'] = null;
-    let exitUnresolved = false;
-
-    if (status === 'InActive') {
-      totalInactive += 1;
-      const ge = globalByMmid.get(mmid);
-      const ey = exitsYtdByMmid.get(mmid);
-      if (ge) {
-        exitDateResolved = ge.confirmedLwd ?? ge.lwd;
-        exitSource = 'global';
-      } else if (ey) {
-        exitDateResolved = ey.lwd;
-        exitSource = 'exits_ytd';
-      }
-      if (!exitDateResolved) {
-        exitUnresolved = true;
-        unresolvedCount += 1;
-      }
-    }
-
     const client = teamClientLookup.get(teamName) ?? null;
     const ey = exitsYtdByMmid.get(mmid);
 
-    return {
+    employees.push({
       mmid,
       name: cleanStr(r['Full name']),
       gender: cleanStr(r['Gender']),
       designation: cleanStr(r['Designation']),
       employeeType: cleanStr(r['Employee type']),
       teamName,
-      status,
+      status: 'Active',
       doj: parseDate(r['Date Of Joining/Permanent']),
       grade: cleanStr(r['Grade']),
       hrbp: cleanStr(r['HRBP']),
@@ -179,14 +180,97 @@ function buildDataBundle(raw: RawRows): DataBundle {
       resourceCapability: cleanStr(r['Resource Capability']),
       client,
       clientSource: client ? 'lookup' : null,
+      exitDateResolved: null,
+      exitSource: null,
+      exitUnresolved: false,
+      deliveryHead: ey?.deliveryHead ?? null,
+      reasonsCategory: ey?.reasonsCategory ?? null,
+      voluntary: ey?.voluntary ?? null,
+    });
+  }
+
+  let unresolvedCount = 0;
+  let totalInactive = 0;
+
+  // 2. Exited employees, from Global Exits (all-time, preferred source for DOJ + exit date).
+  for (const r of globalExits) {
+    if (seenMmids.has(r.mmid)) continue;
+    seenMmids.add(r.mmid);
+    totalInactive += 1;
+
+    const ey = exitsYtdByMmid.get(r.mmid);
+    const doj = r.doj ?? ey?.doj ?? null;
+    const exitDateResolved = r.confirmedLwd ?? r.lwd ?? ey?.lwd ?? null;
+    const exitUnresolved = !doj || !exitDateResolved;
+    if (exitUnresolved) unresolvedCount += 1;
+
+    const client = ey?.client || teamClientLookup.get(r.teamName) || null;
+
+    employees.push({
+      mmid: r.mmid,
+      name: r.memberName,
+      gender: '',
+      designation: '',
+      employeeType: '',
+      teamName: r.teamName,
+      status: 'InActive',
+      doj,
+      grade: r.grade || ey?.grade || '',
+      hrbp: r.hrbp,
+      serviceArea: r.serviceArea || ey?.serviceArea || '',
+      jobLocation: r.jobLocation,
+      country: ey?.country ?? '',
+      contractEndDate: '',
+      resourceCapability: '',
+      client,
+      clientSource: client ? 'lookup' : null,
       exitDateResolved,
-      exitSource,
+      exitSource: 'global',
       exitUnresolved,
       deliveryHead: ey?.deliveryHead ?? null,
       reasonsCategory: ey?.reasonsCategory ?? null,
       voluntary: ey?.voluntary ?? null,
-    };
-  });
+    });
+  }
+
+  // 3. Exited employees present only in Exits-YTD (not yet in Global Exits — e.g. very recent).
+  for (const r of exitsYtd) {
+    if (seenMmids.has(r.mmid)) continue;
+    seenMmids.add(r.mmid);
+    totalInactive += 1;
+
+    const exitDateResolved = r.lwd;
+    const exitUnresolved = !r.doj || !exitDateResolved;
+    if (exitUnresolved) unresolvedCount += 1;
+
+    const client = r.client || teamClientLookup.get(r.team) || null;
+
+    employees.push({
+      mmid: r.mmid,
+      name: r.name,
+      gender: '',
+      designation: '',
+      employeeType: '',
+      teamName: r.team,
+      status: 'InActive',
+      doj: r.doj,
+      grade: r.grade,
+      hrbp: r.hrbp,
+      serviceArea: r.serviceArea,
+      jobLocation: '',
+      country: r.country,
+      contractEndDate: '',
+      resourceCapability: '',
+      client,
+      clientSource: client ? 'lookup' : null,
+      exitDateResolved,
+      exitSource: 'exits_ytd',
+      exitUnresolved,
+      deliveryHead: r.deliveryHead || null,
+      reasonsCategory: r.reasonsCategory || null,
+      voluntary: r.voluntary || null,
+    });
+  }
 
   const mappedTeams = new Set(
     employees.filter((e) => e.status === 'Active' && e.client).map((e) => e.teamName),
