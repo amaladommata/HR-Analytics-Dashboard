@@ -6,10 +6,10 @@ import { GrainToggle } from '../components/GrainToggle';
 import { TrendChart } from '../components/TrendChart';
 
 function matchesNoticeFilters(r: DataBundle['noticePeriod'][number], filters: Filters): boolean {
-  if (filters.client && r.client !== filters.client) return false;
-  if (filters.grade && r.grade !== filters.grade) return false;
-  if (filters.serviceArea && r.serviceArea !== filters.serviceArea) return false;
-  if (filters.teamName && r.team !== filters.teamName) return false;
+  if (filters.client.length && !filters.client.includes(r.client)) return false;
+  if (filters.grade.length && !filters.grade.includes(r.grade)) return false;
+  if (filters.serviceArea.length && !filters.serviceArea.includes(r.serviceArea)) return false;
+  if (filters.teamName.length && !filters.teamName.includes(r.team)) return false;
   return true;
 }
 
@@ -124,7 +124,7 @@ export function NoticePeriodPage({ data, filters, asOf, onFilterToggle }: Notice
     filterKey?: keyof Filters,
   ) => {
     const clickable = filterKey && label !== 'Unknown';
-    const selected = filterKey && filters[filterKey] === label;
+    const selected = filterKey && filters[filterKey].includes(label);
     return (
       <div
         key={label}

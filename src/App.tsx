@@ -42,9 +42,12 @@ function App() {
     return () => clearInterval(id);
   }, [refresh]);
 
-  /** Click-to-cross-filter: clicking a value anywhere on the dashboard filters every tab, like clicking a mark in Looker/Tableau. Clicking the same value again clears it. */
+/** Click-to-cross-filter: clicking a value anywhere on the dashboard adds/removes it from that dimension's selection and filters every tab, like clicking a mark in Looker/Tableau. Each dimension supports multiple selected values (OR). */
   const toggleFilter = useCallback((key: keyof Filters, value: string) => {
-    setFilters((f) => ({ ...f, [key]: f[key] === value ? null : value }));
+    setFilters((f) => ({
+      ...f,
+      [key]: f[key].includes(value) ? f[key].filter((v) => v !== value) : [...f[key], value],
+    }));
   }, []);
 
   const filterOptions = useMemo(
@@ -106,7 +109,7 @@ function App() {
           <FilterBar
             filters={filters}
             options={filterOptions}
-            onChange={(key, value) => setFilters((f) => ({ ...f, [key]: value }))}
+            onChange={(key, values) => setFilters((f) => ({ ...f, [key]: values }))}
             onReset={() => setFilters(EMPTY_FILTERS)}
           />
 

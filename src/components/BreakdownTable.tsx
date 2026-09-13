@@ -58,7 +58,7 @@ export function BreakdownTable({
     .slice(0, limit);
 
   const isSelected = (key: string) =>
-    filterKey ? filters[filterKey] === key : selectedKey === key;
+    filterKey ? filters[filterKey].includes(key) : selectedKey === key;
   const isClickable = (key: string) =>
     filterKey ? !NON_FILTERABLE.has(key) : Boolean(onRowClick);
 

@@ -1,28 +1,33 @@
-import type { Employee, ExitsYtdRow, Filters } from './types';
+import type { Employee, Filters } from './types';
+
+/** A dimension with no selections matches everything; otherwise the employee's value must be one of the selected values (OR). */
+function matchesDimension(selected: string[], value: string | null): boolean {
+  return selected.length === 0 || (value !== null && selected.includes(value));
+}
 
 export function matchesFilters(e: Employee, filters: Filters): boolean {
-  if (filters.client && e.client !== filters.client) return false;
-  if (filters.country && e.country !== filters.country) return false;
-  if (filters.grade && e.grade !== filters.grade) return false;
-  if (filters.serviceArea && e.serviceArea !== filters.serviceArea) return false;
-  if (filters.gender && e.gender !== filters.gender) return false;
-  if (filters.employeeType && e.employeeType !== filters.employeeType) return false;
-  if (filters.teamName && e.teamName !== filters.teamName) return false;
-  if (filters.reasonsCategory && e.reasonsCategory !== filters.reasonsCategory) return false;
-  if (filters.voluntary && e.voluntary !== filters.voluntary) return false;
+  if (!matchesDimension(filters.client, e.client)) return false;
+  if (!matchesDimension(filters.country, e.country)) return false;
+  if (!matchesDimension(filters.grade, e.grade)) return false;
+  if (!matchesDimension(filters.serviceArea, e.serviceArea)) return false;
+  if (!matchesDimension(filters.gender, e.gender)) return false;
+  if (!matchesDimension(filters.employeeType, e.employeeType)) return false;
+  if (!matchesDimension(filters.teamName, e.teamName)) return false;
+  if (!matchesDimension(filters.reasonsCategory, e.reasonsCategory)) return false;
+  if (!matchesDimension(filters.voluntary, e.voluntary)) return false;
   return true;
 }
 
 export const EMPTY_FILTERS: Filters = {
-  client: null,
-  country: null,
-  grade: null,
-  serviceArea: null,
-  gender: null,
-  employeeType: null,
-  teamName: null,
-  reasonsCategory: null,
-  voluntary: null,
+  client: [],
+  country: [],
+  grade: [],
+  serviceArea: [],
+  gender: [],
+  employeeType: [],
+  teamName: [],
+  reasonsCategory: [],
+  voluntary: [],
 };
 
 /**
@@ -100,19 +105,28 @@ export interface ReasonCount {
   pct: number;
 }
 
-/** Top reasons by "Reasons Category" (exits_ytd_clean), joined on MMID within [start,end]. */
+/**
+ * Top reasons among exits in [start,end], matching filters. Built from the
+ * SAME exit population as exitsInPeriod()/the Exits tile (i.e. keyed off
+ * each employee's resolved exit date, not exitsYtd's own LWD column) so the
+ * reason bars always sum to the same total the page's "Exits" tile shows.
+ * Exits with no Reasons Category on file (common for older Global-Exits-only
+ * records; that field only exists in Exits-YTD) are grouped as "Not Categorized".
+ */
 export function topReasons(
-  exitsYtd: ExitsYtdRow[],
+  employees: Employee[],
   periodStart: Date,
   periodEnd: Date,
+  filters: Filters = EMPTY_FILTERS,
   limit = 8,
 ): ReasonCount[] {
-  const inPeriod = exitsYtd.filter(
-    (r) => r.lwd && r.lwd >= periodStart && r.lwd <= periodEnd && r.reasonsCategory,
-  );
+  const exits = exitsInPeriod(employees, periodStart, periodEnd, filters);
   const counts = new Map<string, number>();
-  for (const r of inPeriod) counts.set(r.reasonsCategory, (counts.get(r.reasonsCategory) ?? 0) + 1);
-  const total = inPeriod.length || 1;
+  for (const e of exits) {
+    const key = e.reasonsCategory || 'Not Categorized';
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  const total = exits.length || 1;
   return [...counts.entries()]
     .map(([reason, count]) => ({ reason, count, pct: (count / total) * 100 }))
     .sort((a, b) => b.count - a.count)
@@ -137,7 +151,7 @@ export function topClientAttrition(
   const clients = new Set(employees.map((e) => e.client).filter((c): c is string => !!c));
   const results: ClientAttrition[] = [];
   for (const client of clients) {
-    const filters = { ...EMPTY_FILTERS, client };
+    const filters = { ...EMPTY_FILTERS, client: [client] };
     const avgHc = avgHeadcount(employees, periodStart, periodEnd, filters);
     if (avgHc < minHc) continue;
     const exits = exitsInPeriod(employees, periodStart, periodEnd, filters).length;
@@ -151,24 +165,21 @@ export interface DrillDownGroup {
   counts: { key: string; count: number }[];
 }
 
-/** Breaks exits matching `reasonsCategory` within [start,end] down by PG Rating, Grade, and Tenure bucket. */
+/** Breaks exits matching `reasonsCategory` within [start,end] (same population as topReasons) down by PG Rating, Grade, and Tenure bucket. */
 export function reasonDrillDown(
-  exitsYtd: ExitsYtdRow[],
+  employees: Employee[],
   reasonsCategory: string,
   periodStart: Date,
   periodEnd: Date,
+  filters: Filters = EMPTY_FILTERS,
 ): DrillDownGroup[] {
-  const rows = exitsYtd.filter(
-    (r) =>
-      r.reasonsCategory === reasonsCategory &&
-      r.lwd &&
-      r.lwd >= periodStart &&
-      r.lwd <= periodEnd,
+  const rows = exitsInPeriod(employees, periodStart, periodEnd, filters).filter(
+    (e) => (e.reasonsCategory || 'Not Categorized') === reasonsCategory,
   );
-  const groupBy = (pick: (r: ExitsYtdRow) => string) => {
+  const groupBy = (pick: (e: Employee) => string | null) => {
     const counts = new Map<string, number>();
-    for (const r of rows) {
-      const key = pick(r) || 'Not Available';
+    for (const e of rows) {
+      const key = pick(e) || 'Not Available';
       counts.set(key, (counts.get(key) ?? 0) + 1);
     }
     return [...counts.entries()]
@@ -176,9 +187,9 @@ export function reasonDrillDown(
       .sort((a, b) => b.count - a.count);
   };
   return [
-    { dimension: 'PG Rating', counts: groupBy((r) => r.pgRating) },
-    { dimension: 'Grade', counts: groupBy((r) => r.grade) },
-    { dimension: 'Tenure', counts: groupBy((r) => r.tenurity) },
+    { dimension: 'PG Rating', counts: groupBy((e) => e.pgRating) },
+    { dimension: 'Grade', counts: groupBy((e) => e.grade) },
+    { dimension: 'Tenure', counts: groupBy((e) => e.tenurity) },
   ];
 }
 

@@ -47,8 +47,20 @@ export function rolling13Months(asOf: Date): Period[] {
 
 export type Grain = 'monthly' | 'quarterly' | 'fytd';
 
+/**
+ * The current period always ends at `asOf`, never at a future date (month/quarter/FY-end) —
+ * so a still-in-progress month reads as "Sep 26 MTD", not "Sep 26" indistinguishable from a
+ * completed month with a full 30 days of exits behind it.
+ */
 export function currentPeriod(grain: Grain, asOf: Date): Period {
-  if (grain === 'monthly') return { label: formatMonth(asOf), start: monthStart(asOf), end: monthEnd(asOf) };
+  if (grain === 'monthly') {
+    const isPartial = asOf < monthEnd(asOf);
+    return {
+      label: isPartial ? `${formatMonth(asOf)} MTD` : formatMonth(asOf),
+      start: monthStart(asOf),
+      end: asOf,
+    };
+  }
   if (grain === 'quarterly') return { label: 'QTD', start: quarterStart(asOf), end: asOf };
   return { label: 'FYTD', start: fyStart(asOf), end: asOf };
 }

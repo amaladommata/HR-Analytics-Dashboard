@@ -186,6 +186,8 @@ function buildDataBundle(raw: RawRows): DataBundle {
       deliveryHead: ey?.deliveryHead ?? null,
       reasonsCategory: ey?.reasonsCategory ?? null,
       voluntary: ey?.voluntary ?? null,
+      pgRating: ey?.pgRating ?? null,
+      tenurity: ey?.tenurity ?? null,
     });
   }
 
@@ -230,6 +232,8 @@ function buildDataBundle(raw: RawRows): DataBundle {
       deliveryHead: ey?.deliveryHead ?? null,
       reasonsCategory: ey?.reasonsCategory ?? null,
       voluntary: ey?.voluntary ?? null,
+      pgRating: ey?.pgRating ?? null,
+      tenurity: ey?.tenurity ?? null,
     });
   }
 
@@ -269,6 +273,8 @@ function buildDataBundle(raw: RawRows): DataBundle {
       deliveryHead: r.deliveryHead || null,
       reasonsCategory: r.reasonsCategory || null,
       voluntary: r.voluntary || null,
+      pgRating: r.pgRating || null,
+      tenurity: r.tenurity || null,
     });
   }
 
