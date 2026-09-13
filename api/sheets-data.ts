@@ -121,6 +121,23 @@ function formatCell(cell: unknown): string {
   return String(cell);
 }
 
+/**
+ * Defends against the two most common ways a pasted PEM key breaks in a
+ * Vercel env var: surrounding quote characters coming along for the paste
+ * (the value literally starts/ends with " or '), and literal "\n" two-char
+ * sequences that need converting to real newlines (vs. a value that
+ * already has real newlines, which this leaves alone).
+ */
+function normalizePrivateKey(raw: string | undefined): string | null {
+  if (!raw) return null;
+  let key = raw.trim();
+  if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
+    key = key.slice(1, -1).trim();
+  }
+  if (key.includes('\\n')) key = key.replace(/\\n/g, '\n');
+  return key;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method && req.method !== 'GET') {
     res.status(405).json({ error: 'Method not allowed' });
@@ -128,10 +145,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-    const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?.replace(/\\n/g, '\n');
+    const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim();
+    const privateKey = normalizePrivateKey(process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY);
     if (!email || !privateKey) {
       throw new Error('GOOGLE_SERVICE_ACCOUNT_EMAIL / GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY not set');
+    }
+    if (!privateKey.includes('BEGIN PRIVATE KEY')) {
+      throw new Error(
+        "GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY doesn't look like a PEM key (no 'BEGIN PRIVATE KEY' marker) " +
+          '— check it was pasted without surrounding quotes and with \\n between lines preserved.',
+      );
     }
 
     const auth = new GoogleAuth({
