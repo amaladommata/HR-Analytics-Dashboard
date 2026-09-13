@@ -13,6 +13,15 @@ import type {
 
 type Row = Record<string, string>;
 
+/** Returns the first non-blank value among several possible column names — the Headcount sheet's export format has changed more than once, so read new-vs-old header names without breaking either. */
+function pick(r: Row, ...keys: string[]): string {
+  for (const k of keys) {
+    const v = cleanStr(r[k]);
+    if (v) return v;
+  }
+  return '';
+}
+
 interface RawRows {
   headcount: Row[];
   exitsYtd: Row[];
@@ -215,7 +224,7 @@ function buildDataBundle(raw: RawRows): DataBundle {
   // defensive: if a Status column is still present, honor it rather than assume every
   // row is active (matters for the bundled CSV fallback, which predates this change).
   const headcountRows = raw.headcount.filter((r) => {
-    if (!cleanStr(r['Mediamint id'])) return false;
+    if (!pick(r, 'MMID', 'Mediamint id')) return false;
     const status = cleanStr(r['Status']);
     return !status || status === 'Active';
   });
@@ -232,38 +241,41 @@ function buildDataBundle(raw: RawRows): DataBundle {
   const employees: Employee[] = [];
   const seenMmids = new Set<string>();
 
-  // 1. Active employees, straight from the Headcount tab.
+  // 1. Active employees, straight from the Headcount tab. The sheet's export format has
+  //    changed schema entirely at least once (old: "Mediamint id"/"Full name"/"Client"/...;
+  //    new: "MMID"/"NAME"/"CLIENT_NAME"/...) — pick() tries both so this survives either.
   for (const r of headcountRows) {
-    const mmid = cleanStr(r['Mediamint id']);
+    const mmid = pick(r, 'MMID', 'Mediamint id');
     if (!mmid || seenMmids.has(mmid)) continue;
     seenMmids.add(mmid);
 
-    const teamName = cleanStr(r['Team name']);
+    const teamName = pick(r, 'TEAM', 'Team name');
     // Prefer a direct Client column on Headcount itself, if the sheet has one — the
     // team-name lookup below only exists as a fallback reconstruction for when it doesn't.
-    const directClient = cleanStr(r['Client']);
+    const directClient = pick(r, 'CLIENT_NAME', 'Client');
     const client = directClient || teamClientLookup.get(teamName) || null;
     const clientSource: Employee['clientSource'] = directClient ? 'direct' : client ? 'lookup' : null;
-    const billingType = cleanStr(r['Billing Type']) || null;
-    const deliveryHead = teamDeliveryHeadLookup.get(teamName) ?? null;
+    const billingType = pick(r, 'BILLING_TYPE', 'Billing Type') || null;
+    const directDeliveryHead = pick(r, 'DELIVERY_HEAD', 'Delivery Head');
+    const deliveryHead = directDeliveryHead || teamDeliveryHeadLookup.get(teamName) || null;
     const ey = exitsYtdByMmid.get(mmid);
 
     employees.push({
       mmid,
-      name: cleanStr(r['Full name']),
-      gender: cleanStr(r['Gender']),
-      designation: cleanStr(r['Designation']),
-      employeeType: cleanStr(r['Employee type']),
+      name: pick(r, 'NAME', 'Full name'),
+      gender: pick(r, 'GENDER', 'Gender'),
+      designation: pick(r, 'GRADE_DESCRIPTION', 'Designation'),
+      employeeType: pick(r, 'Employee type'),
       teamName,
       status: 'Active',
-      doj: parseDate(r['Date Of Joining/Permanent']),
-      grade: cleanStr(r['Grade']),
-      hrbp: cleanStr(r['HRBP']),
-      serviceArea: cleanStr(r['Service Area']),
-      jobLocation: cleanStr(r['Job Location']),
-      country: cleanStr(r['Country']),
-      contractEndDate: cleanStr(r['Contract End Date']),
-      resourceCapability: cleanStr(r['Resource Capability']),
+      doj: parseDate(pick(r, 'JOINING_DATE', 'Date Of Joining/Permanent')),
+      grade: pick(r, 'GRADE', 'Grade'),
+      hrbp: pick(r, 'HRBP'),
+      serviceArea: pick(r, 'SERVICEAREA_NAME', 'Service Area'),
+      jobLocation: pick(r, 'JOB_LOCATION_NAME', 'Job Location'),
+      country: pick(r, 'Country'),
+      contractEndDate: pick(r, 'Contract End Date'),
+      resourceCapability: pick(r, 'RESOURCE_CAPABILITY', 'Resource Capability'),
       client,
       clientSource,
       billingType,
