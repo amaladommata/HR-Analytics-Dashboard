@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
 import type { DataBundle, Filters } from '../lib/types';
-import { attritionPct, exitsInPeriod, reasonDrillDown, topClientAttrition, topReasons } from '../lib/calc';
+import { attritionPct, avgHeadcount, exitsInPeriod, reasonDrillDown, topClientAttrition, topReasons } from '../lib/calc';
 import { currentPeriod, rolling13Months, type Grain } from '../lib/periods';
 import { Tile } from '../components/Tile';
 import { GrainToggle } from '../components/GrainToggle';
 import { TrendChart } from '../components/TrendChart';
 import { BreakdownTable } from '../components/BreakdownTable';
 import { DrillDownPanel } from '../components/DrillDownPanel';
+import { EmployeeDetailTable } from '../components/EmployeeDetailTable';
 
 interface AttritionPageProps {
   data: DataBundle;
@@ -29,8 +30,8 @@ export function AttritionPage({ data, filters, asOf, onFilterToggle }: Attrition
     [employees, period, filters],
   );
   const avgHc = useMemo(
-    () => (exits.length && pct ? Math.round((exits.length / pct) * 100) : 0),
-    [exits, pct],
+    () => Math.round(avgHeadcount(employees, period.start, period.end, filters)),
+    [employees, period, filters],
   );
 
   const trend = useMemo(
@@ -221,6 +222,12 @@ export function AttritionPage({ data, filters, asOf, onFilterToggle }: Attrition
           onFilterToggle={onFilterToggle}
         />
       </div>
+
+      <EmployeeDetailTable
+        title={`Exit details (${period.label})`}
+        employees={exits}
+        filenamePrefix="exits"
+      />
     </div>
   );
 }

@@ -100,6 +100,48 @@ function loadNoticePeriod(rows: Row[]): NoticePeriodRow[] {
 }
 
 /**
+ * Some employees have more than one row in Global Exits for the same MMID
+ * (e.g. a withdrawn resignation attempt with blank dates, followed by the
+ * real exit with an LWD). Picking whichever row happens to come first in
+ * the sheet was wrong — it could lock onto the blank row and mark someone
+ * "unresolved" even though a real exit record exists elsewhere in the same
+ * tab. Prefer any row that actually has a resolved date; among those, the
+ * most recent one wins.
+ */
+function bestGlobalExitByMmid(rows: GlobalExitRow[]): Map<string, GlobalExitRow> {
+  const best = new Map<string, GlobalExitRow>();
+  for (const r of rows) {
+    const existing = best.get(r.mmid);
+    if (!existing) {
+      best.set(r.mmid, r);
+      continue;
+    }
+    const existingDate = existing.confirmedLwd ?? existing.lwd;
+    const candidateDate = r.confirmedLwd ?? r.lwd;
+    if (candidateDate && (!existingDate || candidateDate > existingDate)) {
+      best.set(r.mmid, r);
+    }
+  }
+  return best;
+}
+
+/** Same duplicate-row problem as Global Exits, applied to Exits-YTD (keyed off its own LWD). */
+function bestExitsYtdByMmid(rows: ExitsYtdRow[]): Map<string, ExitsYtdRow> {
+  const best = new Map<string, ExitsYtdRow>();
+  for (const r of rows) {
+    const existing = best.get(r.mmid);
+    if (!existing) {
+      best.set(r.mmid, r);
+      continue;
+    }
+    if (r.lwd && (!existing.lwd || r.lwd > existing.lwd)) {
+      best.set(r.mmid, r);
+    }
+  }
+  return best;
+}
+
+/**
  * Team name -> value lookup, built from Exits-YTD and Notice Period (the only
  * two tabs that carry Client/Delivery Head at all — BUILD_SPEC.md section
  * 7.1). Used to reconstruct Client and Delivery Head for employees that
@@ -148,8 +190,8 @@ function buildDataBundle(raw: RawRows): DataBundle {
     return !status || status === 'Active';
   });
 
-  const exitsYtdByMmid = new Map<string, ExitsYtdRow>();
-  for (const r of exitsYtd) if (!exitsYtdByMmid.has(r.mmid)) exitsYtdByMmid.set(r.mmid, r);
+  const exitsYtdByMmid = bestExitsYtdByMmid(exitsYtd);
+  const globalExitsByMmid = bestGlobalExitByMmid(globalExits);
 
   const teamClientLookup = buildTeamLookup(exitsYtd, noticePeriod, (r) => ({ team: r.team, value: r.client }));
   const teamDeliveryHeadLookup = buildTeamLookup(exitsYtd, noticePeriod, (r) => ({
@@ -167,7 +209,11 @@ function buildDataBundle(raw: RawRows): DataBundle {
     seenMmids.add(mmid);
 
     const teamName = cleanStr(r['Team name']);
-    const client = teamClientLookup.get(teamName) ?? null;
+    // Prefer a direct Client column on Headcount itself, if the sheet has one — the
+    // team-name lookup below only exists as a fallback reconstruction for when it doesn't.
+    const directClient = cleanStr(r['Client']);
+    const client = directClient || teamClientLookup.get(teamName) || null;
+    const clientSource: Employee['clientSource'] = directClient ? 'direct' : client ? 'lookup' : null;
     const deliveryHead = teamDeliveryHeadLookup.get(teamName) ?? null;
     const ey = exitsYtdByMmid.get(mmid);
 
@@ -188,7 +234,7 @@ function buildDataBundle(raw: RawRows): DataBundle {
       contractEndDate: cleanStr(r['Contract End Date']),
       resourceCapability: cleanStr(r['Resource Capability']),
       client,
-      clientSource: client ? 'lookup' : null,
+      clientSource,
       exitDateResolved: null,
       exitSource: null,
       exitUnresolved: false,
@@ -204,7 +250,8 @@ function buildDataBundle(raw: RawRows): DataBundle {
   let totalInactive = 0;
 
   // 2. Exited employees, from Global Exits (all-time, preferred source for DOJ + exit date).
-  for (const r of globalExits) {
+  //    Uses the best (most-complete) row per MMID — see bestGlobalExitByMmid.
+  for (const r of globalExitsByMmid.values()) {
     if (seenMmids.has(r.mmid)) continue;
     seenMmids.add(r.mmid);
     totalInactive += 1;
@@ -248,7 +295,7 @@ function buildDataBundle(raw: RawRows): DataBundle {
   }
 
   // 3. Exited employees present only in Exits-YTD (not yet in Global Exits — e.g. very recent).
-  for (const r of exitsYtd) {
+  for (const r of exitsYtdByMmid.values()) {
     if (seenMmids.has(r.mmid)) continue;
     seenMmids.add(r.mmid);
     totalInactive += 1;
@@ -288,12 +335,12 @@ function buildDataBundle(raw: RawRows): DataBundle {
     });
   }
 
-  const mappedTeams = new Set(
-    employees.filter((e) => e.status === 'Active' && e.client).map((e) => e.teamName),
-  );
-  const totalActiveTeams = new Set(
-    employees.filter((e) => e.status === 'Active').map((e) => e.teamName),
-  );
+  const activeEmployees = employees.filter((e) => e.status === 'Active');
+  const clientCoverage = {
+    direct: activeEmployees.filter((e) => e.clientSource === 'direct').length,
+    lookup: activeEmployees.filter((e) => e.clientSource === 'lookup').length,
+    total: activeEmployees.length,
+  };
 
   return {
     employees,
@@ -302,7 +349,7 @@ function buildDataBundle(raw: RawRows): DataBundle {
     noticePeriod,
     unresolvedCount,
     totalInactive,
-    teamClientCoverage: { mapped: mappedTeams.size, total: totalActiveTeams.size },
+    clientCoverage,
     source: raw.source,
   };
 }

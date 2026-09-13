@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
 import { Users } from 'lucide-react';
 import type { Employee, Filters } from '../lib/types';
-import { headcount } from '../lib/calc';
+import { headcount, isActiveAsOf, matchesFilters } from '../lib/calc';
 import { currentPeriod, rolling13Months, type Grain } from '../lib/periods';
 import { Tile } from '../components/Tile';
 import { GrainToggle } from '../components/GrainToggle';
 import { BreakdownTable } from '../components/BreakdownTable';
 import { TrendChart } from '../components/TrendChart';
+import { EmployeeDetailTable } from '../components/EmployeeDetailTable';
 
 interface HeadcountPageProps {
   employees: Employee[];
@@ -29,6 +30,11 @@ export function HeadcountPage({ employees, filters, asOf, onFilterToggle }: Head
         value: headcount(employees, p.end, filters),
       })),
     [employees, asOf, filters],
+  );
+
+  const activeEmployees = useMemo(
+    () => employees.filter((e) => matchesFilters(e, filters) && isActiveAsOf(e, period.end)),
+    [employees, filters, period],
   );
 
   return (
@@ -114,6 +120,12 @@ export function HeadcountPage({ employees, filters, asOf, onFilterToggle }: Head
           onFilterToggle={onFilterToggle}
         />
       </div>
+
+      <EmployeeDetailTable
+        title={`Employee details (${period.label} closing HC)`}
+        employees={activeEmployees}
+        filenamePrefix="headcount"
+      />
     </div>
   );
 }
