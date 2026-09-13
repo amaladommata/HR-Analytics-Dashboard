@@ -60,6 +60,15 @@ export function HeadcountPage({ employees, filters, asOf, onFilterToggle }: Head
           onFilterToggle={onFilterToggle}
         />
         <BreakdownTable
+          title="By Delivery Head (partial coverage — see note above)"
+          employees={employees}
+          dimension={(e) => e.deliveryHead ?? 'Unmapped'}
+          asOf={period.end}
+          filters={filters}
+          filterKey="deliveryHead"
+          onFilterToggle={onFilterToggle}
+        />
+        <BreakdownTable
           title="By Country"
           employees={employees}
           dimension={(e) => e.country}

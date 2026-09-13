@@ -99,17 +99,21 @@ function loadNoticePeriod(rows: Row[]): NoticePeriodRow[] {
     .filter((r) => r.mmid);
 }
 
-/** Team name -> Client lookup, built from Exits-YTD and Notice Period (BUILD_SPEC.md section 7.1). */
-function buildTeamClientLookup(
+/**
+ * Team name -> value lookup, built from Exits-YTD and Notice Period (the only
+ * two tabs that carry Client/Delivery Head at all — BUILD_SPEC.md section
+ * 7.1). Used to reconstruct Client and Delivery Head for employees that
+ * don't have a direct match in either tab (i.e. most active employees).
+ */
+function buildTeamLookup(
   exitsYtd: ExitsYtdRow[],
   noticePeriod: NoticePeriodRow[],
+  pick: (r: ExitsYtdRow | NoticePeriodRow) => { team: string; value: string },
 ): Map<string, string> {
   const lookup = new Map<string, string>();
-  for (const r of exitsYtd) {
-    if (r.team && r.client && !lookup.has(r.team)) lookup.set(r.team, r.client);
-  }
-  for (const r of noticePeriod) {
-    if (r.team && r.client && !lookup.has(r.team)) lookup.set(r.team, r.client);
+  for (const r of [...exitsYtd, ...noticePeriod]) {
+    const { team, value } = pick(r);
+    if (team && value && !lookup.has(team)) lookup.set(team, value);
   }
   return lookup;
 }
@@ -147,7 +151,11 @@ function buildDataBundle(raw: RawRows): DataBundle {
   const exitsYtdByMmid = new Map<string, ExitsYtdRow>();
   for (const r of exitsYtd) if (!exitsYtdByMmid.has(r.mmid)) exitsYtdByMmid.set(r.mmid, r);
 
-  const teamClientLookup = buildTeamClientLookup(exitsYtd, noticePeriod);
+  const teamClientLookup = buildTeamLookup(exitsYtd, noticePeriod, (r) => ({ team: r.team, value: r.client }));
+  const teamDeliveryHeadLookup = buildTeamLookup(exitsYtd, noticePeriod, (r) => ({
+    team: r.team,
+    value: r.deliveryHead,
+  }));
 
   const employees: Employee[] = [];
   const seenMmids = new Set<string>();
@@ -160,6 +168,7 @@ function buildDataBundle(raw: RawRows): DataBundle {
 
     const teamName = cleanStr(r['Team name']);
     const client = teamClientLookup.get(teamName) ?? null;
+    const deliveryHead = teamDeliveryHeadLookup.get(teamName) ?? null;
     const ey = exitsYtdByMmid.get(mmid);
 
     employees.push({
@@ -183,9 +192,11 @@ function buildDataBundle(raw: RawRows): DataBundle {
       exitDateResolved: null,
       exitSource: null,
       exitUnresolved: false,
-      deliveryHead: ey?.deliveryHead ?? null,
+      deliveryHead: ey?.deliveryHead || deliveryHead,
       reasonsCategory: ey?.reasonsCategory ?? null,
       voluntary: ey?.voluntary ?? null,
+      pgRating: ey?.pgRating ?? null,
+      tenurity: ey?.tenurity ?? null,
     });
   }
 
@@ -205,6 +216,7 @@ function buildDataBundle(raw: RawRows): DataBundle {
     if (exitUnresolved) unresolvedCount += 1;
 
     const client = ey?.client || teamClientLookup.get(r.teamName) || null;
+    const deliveryHead = ey?.deliveryHead || teamDeliveryHeadLookup.get(r.teamName) || null;
 
     employees.push({
       mmid: r.mmid,
@@ -227,9 +239,11 @@ function buildDataBundle(raw: RawRows): DataBundle {
       exitDateResolved,
       exitSource: 'global',
       exitUnresolved,
-      deliveryHead: ey?.deliveryHead ?? null,
+      deliveryHead,
       reasonsCategory: ey?.reasonsCategory ?? null,
       voluntary: ey?.voluntary ?? null,
+      pgRating: ey?.pgRating ?? null,
+      tenurity: ey?.tenurity ?? null,
     });
   }
 
@@ -269,6 +283,8 @@ function buildDataBundle(raw: RawRows): DataBundle {
       deliveryHead: r.deliveryHead || null,
       reasonsCategory: r.reasonsCategory || null,
       voluntary: r.voluntary || null,
+      pgRating: r.pgRating || null,
+      tenurity: r.tenurity || null,
     });
   }
 

@@ -58,7 +58,7 @@ export function BreakdownTable({
     .slice(0, limit);
 
   const isSelected = (key: string) =>
-    filterKey ? filters[filterKey] === key : selectedKey === key;
+    filterKey ? filters[filterKey].includes(key) : selectedKey === key;
   const isClickable = (key: string) =>
     filterKey ? !NON_FILTERABLE.has(key) : Boolean(onRowClick);
 
@@ -73,7 +73,7 @@ export function BreakdownTable({
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <h3 className="mb-3 text-sm font-semibold text-slate-700">{title}</h3>
+      <h3 className="mb-3 text-sm font-bold text-slate-800">{title}</h3>
       <div className="flex flex-col gap-2">
         {rows.map((r) => (
           <div

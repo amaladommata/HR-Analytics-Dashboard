@@ -6,10 +6,10 @@ import { GrainToggle } from '../components/GrainToggle';
 import { TrendChart } from '../components/TrendChart';
 
 function matchesNoticeFilters(r: DataBundle['noticePeriod'][number], filters: Filters): boolean {
-  if (filters.client && r.client !== filters.client) return false;
-  if (filters.grade && r.grade !== filters.grade) return false;
-  if (filters.serviceArea && r.serviceArea !== filters.serviceArea) return false;
-  if (filters.teamName && r.team !== filters.teamName) return false;
+  if (filters.client.length && !filters.client.includes(r.client)) return false;
+  if (filters.grade.length && !filters.grade.includes(r.grade)) return false;
+  if (filters.serviceArea.length && !filters.serviceArea.includes(r.serviceArea)) return false;
+  if (filters.teamName.length && !filters.teamName.includes(r.team)) return false;
   return true;
 }
 
@@ -124,7 +124,7 @@ export function NoticePeriodPage({ data, filters, asOf, onFilterToggle }: Notice
     filterKey?: keyof Filters,
   ) => {
     const clickable = filterKey && label !== 'Unknown';
-    const selected = filterKey && filters[filterKey] === label;
+    const selected = filterKey && filters[filterKey].includes(label);
     return (
       <div
         key={label}
@@ -168,7 +168,7 @@ export function NoticePeriodPage({ data, filters, asOf, onFilterToggle }: Notice
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h3 className="mb-3 text-sm font-semibold text-slate-700">On Notice — By Team</h3>
+          <h3 className="mb-3 text-sm font-bold text-slate-800">On Notice — By Team</h3>
           <div className="flex flex-col gap-2">
             {byTeam.map(([team, count]) => bar(team, count, filtered.length, 'bg-teal-600', 'teamName'))}
             {byTeam.length === 0 && <p className="text-sm text-slate-400">No data</p>}
@@ -176,7 +176,7 @@ export function NoticePeriodPage({ data, filters, asOf, onFilterToggle }: Notice
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h3 className="mb-3 text-sm font-semibold text-slate-700">On Notice — By Exit Reason Category</h3>
+          <h3 className="mb-3 text-sm font-bold text-slate-800">On Notice — By Exit Reason Category</h3>
           <div className="flex flex-col gap-2">
             {byReason.map(([reason, count]) => bar(reason, count, filtered.length, 'bg-teal-500'))}
             {byReason.length === 0 && <p className="text-sm text-slate-400">No data</p>}
@@ -184,7 +184,7 @@ export function NoticePeriodPage({ data, filters, asOf, onFilterToggle }: Notice
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h3 className="mb-3 text-sm font-semibold text-slate-700">On Notice — By Grade</h3>
+          <h3 className="mb-3 text-sm font-bold text-slate-800">On Notice — By Grade</h3>
           <div className="flex flex-col gap-2">
             {byGrade.map(([grade, count]) => bar(grade, count, filtered.length, 'bg-cyan-600', 'grade'))}
             {byGrade.length === 0 && <p className="text-sm text-slate-400">No data</p>}
@@ -192,7 +192,7 @@ export function NoticePeriodPage({ data, filters, asOf, onFilterToggle }: Notice
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h3 className="mb-3 text-sm font-semibold text-slate-700">On Notice — By Service Area</h3>
+          <h3 className="mb-3 text-sm font-bold text-slate-800">On Notice — By Service Area</h3>
           <div className="flex flex-col gap-2">
             {byServiceArea.map(([area, count]) => bar(area, count, filtered.length, 'bg-cyan-500', 'serviceArea'))}
             {byServiceArea.length === 0 && <p className="text-sm text-slate-400">No data</p>}

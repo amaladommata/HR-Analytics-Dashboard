@@ -27,6 +27,8 @@ export interface Employee {
   deliveryHead: string | null;
   reasonsCategory: string | null;
   voluntary: string | null;
+  pgRating: string | null;
+  tenurity: string | null;
 }
 
 export interface GlobalExitRow {
@@ -94,16 +96,18 @@ export interface NoticePeriodRow {
   location: string;
 }
 
+/** Each dimension is a set of selected values (OR within a dimension); an empty array means "All". */
 export interface Filters {
-  client: string | null;
-  country: string | null;
-  grade: string | null;
-  serviceArea: string | null;
-  gender: string | null;
-  employeeType: string | null;
-  teamName: string | null;
-  reasonsCategory: string | null;
-  voluntary: string | null;
+  client: string[];
+  country: string[];
+  grade: string[];
+  serviceArea: string[];
+  gender: string[];
+  employeeType: string[];
+  teamName: string[];
+  reasonsCategory: string[];
+  voluntary: string[];
+  deliveryHead: string[];
 }
 
 export interface DataBundle {

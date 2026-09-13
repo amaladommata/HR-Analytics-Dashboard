@@ -16,7 +16,7 @@ interface AttritionPageProps {
 }
 
 export function AttritionPage({ data, filters, asOf, onFilterToggle }: AttritionPageProps) {
-  const { employees, exitsYtd } = data;
+  const { employees } = data;
   const [grain, setGrain] = useState<Grain>('monthly');
 
   const period = useMemo(() => currentPeriod(grain, asOf), [grain, asOf]);
@@ -42,16 +42,23 @@ export function AttritionPage({ data, filters, asOf, onFilterToggle }: Attrition
     [employees, asOf, filters],
   );
 
-  const reasons = useMemo(() => topReasons(exitsYtd, period.start, period.end), [exitsYtd, period]);
+  const reasons = useMemo(
+    () => topReasons(employees, period.start, period.end, filters),
+    [employees, period, filters],
+  );
   const clientAttrition = useMemo(
     () => topClientAttrition(employees, period.start, period.end),
     [employees, period],
   );
 
-  const selectedReason = filters.reasonsCategory;
+  // The drill-down panel only makes sense for a single selected reason; skip it when 0 or 2+ are selected.
+  const selectedReason = filters.reasonsCategory.length === 1 ? filters.reasonsCategory[0] : null;
   const drillDown = useMemo(
-    () => (selectedReason ? reasonDrillDown(exitsYtd, selectedReason, period.start, period.end) : null),
-    [exitsYtd, selectedReason, period],
+    () =>
+      selectedReason
+        ? reasonDrillDown(employees, selectedReason, period.start, period.end, filters)
+        : null,
+    [employees, selectedReason, period, filters],
   );
 
   return (
@@ -81,16 +88,18 @@ export function AttritionPage({ data, filters, asOf, onFilterToggle }: Attrition
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-slate-700">Top exit reasons ({period.label})</h3>
+            <h3 className="text-sm font-bold text-slate-800">Top exit reasons ({period.label})</h3>
             <span className="text-xs text-slate-400">click to filter + break down</span>
           </div>
           <div className="flex flex-col gap-2">
-            {reasons.map((r) => (
+            {reasons.map((r) => {
+              const clickable = r.reason !== 'Not Categorized';
+              return (
               <div
                 key={r.reason}
-                onClick={() => onFilterToggle('reasonsCategory', r.reason)}
-                className={`flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-sm hover:bg-teal-50 ${
-                  selectedReason === r.reason ? 'bg-teal-50 ring-1 ring-teal-300' : ''
+                onClick={() => clickable && onFilterToggle('reasonsCategory', r.reason)}
+                className={`flex items-center gap-2 rounded px-1 py-0.5 text-sm ${clickable ? 'cursor-pointer hover:bg-teal-50' : ''} ${
+                  filters.reasonsCategory.includes(r.reason) ? 'bg-teal-50 ring-1 ring-teal-300' : ''
                 }`}
               >
                 <span className="w-40 truncate text-slate-600" title={r.reason}>
@@ -102,13 +111,14 @@ export function AttritionPage({ data, filters, asOf, onFilterToggle }: Attrition
                 <span className="w-10 text-right text-slate-700">{r.count}</span>
                 <span className="w-12 text-right text-xs text-slate-400">{r.pct.toFixed(0)}%</span>
               </div>
-            ))}
+              );
+            })}
             {reasons.length === 0 && <p className="text-sm text-slate-400">No exits in this period</p>}
           </div>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h3 className="mb-3 text-sm font-semibold text-slate-700">
+          <h3 className="mb-3 text-sm font-bold text-slate-800">
             Top client attrition ({period.label}, min. 15 avg HC)
           </h3>
           <div className="flex flex-col gap-2">
@@ -117,7 +127,7 @@ export function AttritionPage({ data, filters, asOf, onFilterToggle }: Attrition
                 key={c.client}
                 onClick={() => onFilterToggle('client', c.client)}
                 className={`flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-sm hover:bg-teal-50 ${
-                  filters.client === c.client ? 'bg-teal-50 ring-1 ring-teal-300' : ''
+                  filters.client.includes(c.client) ? 'bg-teal-50 ring-1 ring-teal-300' : ''
                 }`}
               >
                 <span className="w-32 truncate text-slate-600">{c.client}</span>
@@ -196,6 +206,8 @@ export function AttritionPage({ data, filters, asOf, onFilterToggle }: Attrition
           filters={filters}
           limit={8}
           mode="count"
+          filterKey="deliveryHead"
+          onFilterToggle={onFilterToggle}
         />
         <BreakdownTable
           title={`Exits by Team (${period.label})`}

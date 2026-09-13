@@ -5,7 +5,7 @@ import { attritionPct, exitsInPeriod, headcount } from '../lib/calc';
 import { rolling13Months } from '../lib/periods';
 import { Tile } from '../components/Tile';
 import { TrendChart } from '../components/TrendChart';
-import type { Tab } from '../components/Sidebar';
+import type { Tab } from '../components/TopNav';
 
 interface SummaryPageProps {
   data: DataBundle;
