@@ -13,6 +13,7 @@ const FILTER_LABELS: Record<keyof Filters, string> = {
   reasonsCategory: 'Exit Reason',
   voluntary: 'Voluntary/Involuntary',
   deliveryHead: 'Delivery Head',
+  billingType: 'Billing Type',
 };
 
 /** Builds a plain-text monthly summary for whatever filters are currently active — e.g. set Delivery Head then export to get that person's own portfolio. */

@@ -26,6 +26,7 @@ const LABELS: Record<keyof Filters, string> = {
   reasonsCategory: 'Exit Reason',
   voluntary: 'Voluntary/Involuntary',
   deliveryHead: 'Delivery Head',
+  billingType: 'Billing Type',
 };
 
 export function FilterBar({ filters, options, onChange, onReset }: FilterBarProps) {

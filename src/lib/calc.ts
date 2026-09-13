@@ -16,6 +16,7 @@ export function matchesFilters(e: Employee, filters: Filters): boolean {
   if (!matchesDimension(filters.reasonsCategory, e.reasonsCategory)) return false;
   if (!matchesDimension(filters.voluntary, e.voluntary)) return false;
   if (!matchesDimension(filters.deliveryHead, e.deliveryHead)) return false;
+  if (!matchesDimension(filters.billingType, e.billingType)) return false;
   return true;
 }
 
@@ -30,6 +31,7 @@ export const EMPTY_FILTERS: Filters = {
   reasonsCategory: [],
   voluntary: [],
   deliveryHead: [],
+  billingType: [],
 };
 
 /**

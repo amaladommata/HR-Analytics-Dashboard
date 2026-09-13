@@ -167,6 +167,15 @@ export function AttritionPage({ data, filters, asOf, onFilterToggle }: Attrition
           onFilterToggle={onFilterToggle}
         />
         <BreakdownTable
+          title={`Exits by PG Rating (${period.label})`}
+          employees={exits}
+          dimension={(e) => e.pgRating ?? 'Not Available'}
+          asOf={period.end}
+          filters={filters}
+          limit={8}
+          mode="count"
+        />
+        <BreakdownTable
           title={`Exits by Grade (${period.label})`}
           employees={exits}
           dimension={(e) => e.grade}

@@ -19,6 +19,7 @@ export interface Employee {
 
   client: string | null;
   clientSource: 'direct' | 'lookup' | null;
+  billingType: string | null;
 
   exitDateResolved: Date | null;
   exitSource: ExitSource;
@@ -41,6 +42,9 @@ export interface GlobalExitRow {
   dateOfResignation: Date | null;
   lwd: Date | null;
   confirmedLwd: Date | null;
+  dateOfAbsconding: Date | null;
+  /** A populated value here means the absconding/termination case was reversed — the employee is active, not exited. */
+  terminationWithdrawalDate: Date | null;
   hrbp: string;
   doj: Date | null;
   serviceArea: string;
@@ -108,6 +112,7 @@ export interface Filters {
   reasonsCategory: string[];
   voluntary: string[];
   deliveryHead: string[];
+  billingType: string[];
 }
 
 export interface DataBundle {
@@ -118,6 +123,7 @@ export interface DataBundle {
   unresolvedCount: number;
   totalInactive: number;
   clientCoverage: { direct: number; lookup: number; total: number };
+  billingTypeKnown: number;
   /** 'live' = read from Google Sheets just now; 'bundled' = fell back to the CSV snapshot baked into the build. */
   source: 'live' | 'bundled';
 }

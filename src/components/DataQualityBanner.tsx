@@ -4,6 +4,7 @@ interface DataQualityBannerProps {
   unresolvedCount: number;
   totalInactive: number;
   clientCoverage: { direct: number; lookup: number; total: number };
+  billingTypeKnown: number;
   onViewList: () => void;
 }
 
@@ -11,6 +12,7 @@ export function DataQualityBanner({
   unresolvedCount,
   totalInactive,
   clientCoverage,
+  billingTypeKnown,
   onViewList,
 }: DataQualityBannerProps) {
   const mapped = clientCoverage.direct + clientCoverage.lookup;
@@ -36,7 +38,8 @@ export function DataQualityBanner({
               : clientCoverage.lookup > 0
                 ? " — reconstructed via a Team-name lookup (Headcount has no Client column)"
                 : ''}
-            ) — Billing Type and PG Rating still have no source for active employees in this export.
+            ). Billing Type is known for {billingTypeKnown} of {clientCoverage.total} active employees.
+            PG Rating still has no source for active employees in this export (Exits-YTD only).
           </>
         )}
       </p>

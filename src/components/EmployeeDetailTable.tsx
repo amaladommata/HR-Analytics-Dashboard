@@ -9,6 +9,8 @@ const COLUMNS: { header: string; get: (e: Employee) => string }[] = [
   { header: 'Status', get: (e) => e.status },
   { header: 'Client', get: (e) => e.client ?? '' },
   { header: 'Delivery Head', get: (e) => e.deliveryHead ?? '' },
+  { header: 'Billing Type', get: (e) => e.billingType ?? '' },
+  { header: 'PG Rating', get: (e) => e.pgRating ?? '' },
   { header: 'Team', get: (e) => e.teamName },
   { header: 'Grade', get: (e) => e.grade },
   { header: 'Service Area', get: (e) => e.serviceArea },

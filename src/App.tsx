@@ -64,6 +64,11 @@ function App() {
               label: 'Delivery Head',
               options: distinctValues(data.employees, 'deliveryHead'),
             },
+            {
+              key: 'billingType' as const,
+              label: 'Billing Type',
+              options: distinctValues(data.employees, 'billingType'),
+            },
             { key: 'country' as const, label: 'Country', options: distinctValues(data.employees, 'country') },
             { key: 'grade' as const, label: 'Grade', options: distinctValues(data.employees, 'grade') },
             {
@@ -127,6 +132,7 @@ function App() {
           unresolvedCount={data.unresolvedCount}
           totalInactive={data.totalInactive}
           clientCoverage={data.clientCoverage}
+          billingTypeKnown={data.billingTypeKnown}
           onViewList={() => setShowUnresolved(true)}
         />
 
