@@ -22,16 +22,17 @@ export const EMPTY_FILTERS: Filters = {
 };
 
 /**
- * Active/inactive status strictly as of date D, per BUILD_SPEC.md section 2,
- * with a business-rule override: an InActive employee with no matching exit
- * record in Global Exits or Exits-YTD (no LWD, no resignation/confirmed
- * date) is treated as ACTIVE, not excluded. In practice these are withdrawn
- * resignations, reinstated absconding cases, or other InActive tags that
- * never produced a real exit event — there is no evidence they ever left.
+ * Active/inactive status strictly as of date D, per BUILD_SPEC.md section 2.
+ * An InActive employee with no matching exit record in Global Exits or
+ * Exits-YTD has an unknown exit date and is excluded from as-of-date
+ * headcount (flagged separately, see unresolvedCount) — it is never counted
+ * as active, so the live "Headcount" tiles match the source Status column
+ * for today and reconstruct correctly for past dates using resolved exit
+ * dates for everyone else.
  */
 export function isActiveAsOf(e: Employee, d: Date): boolean {
   if (!e.doj || e.doj > d) return false;
-  if (e.exitUnresolved) return true;
+  if (e.exitUnresolved) return false;
   if (!e.exitDateResolved) return e.status === 'Active';
   return d <= e.exitDateResolved;
 }
@@ -46,7 +47,7 @@ export function headcount(employees: Employee[], d: Date, filters: Filters = EMP
   return count;
 }
 
-/** Count of InActive employees with no matching exit record — now counted as active (see isActiveAsOf). */
+/** Count of InActive employees with no matching exit record — excluded from headcount (see isActiveAsOf). */
 export function unresolvedCount(employees: Employee[], filters: Filters = EMPTY_FILTERS): number {
   return employees.filter((e) => matchesFilters(e, filters) && e.exitUnresolved).length;
 }

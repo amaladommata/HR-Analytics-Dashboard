@@ -60,7 +60,7 @@ export function SummaryPage({ data, filters, asOf }: { data: DataBundle; filters
         <Tile
           label="No exit record"
           value={`${data.unresolvedCount}`}
-          sublabel="InActive tag, counted active"
+          sublabel="InActive tag, excluded from HC"
           accent="warning"
         />
       </div>
